@@ -12,7 +12,7 @@ Multi-objective shortest paths: BOA*, BOBA*, EMOA* and NAMOA* over Pareto fronti
 
 ## Status
 
-Pre-release. Version 0.0.0 reserves the name; the API is not started yet and will change.
+Pre-release. Version 0.0.0 reserves the name; the API is a draft and will change. BOA* and a two-objective Pareto frontier exist; see `docs/design.md` for the plan.
 
 ## License
 
