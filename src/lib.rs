@@ -2,9 +2,14 @@
 //!
 //! Multi-objective shortest paths: BOA*, BOBA*, EMOA* and NAMOA* over Pareto frontiers.
 //!
+//! Given a graph whose edges carry cost vectors, the algorithms find one path
+//! for every Pareto-optimal cost vector from a start state to a goal.
+//!
 //! ## Contents
 //!
+//! - [`boa_star`]: bi-objective A* (Hernández et al., ICAPS 2020).
 //! - [`BiFront`]: a two-objective Pareto frontier.
+//! - [`Graph`] and [`Heuristic`]: the search-space interface.
 //! - [`Cost`] and [`Dominates`]: scalar costs and Pareto dominance.
 //!
 //! ## Planned
@@ -24,8 +29,14 @@
 
 extern crate alloc;
 
+mod boa;
 mod cost;
+mod graph;
+mod output;
 mod pareto;
 
+pub use boa::boa_star;
 pub use cost::{Cost, Dominates, add, weakly_dominates};
+pub use graph::{Graph, Heuristic, ZeroHeuristic};
+pub use output::{Output, Solution, Stats};
 pub use pareto::BiFront;
