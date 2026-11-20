@@ -55,6 +55,9 @@
 //! - [`KnapsackGraph`] and [`LabelCount`]: graphs that encode
 //!   multi-objective knapsacks and the minimum-label objective as additive
 //!   paths for every search.
+//! - [`BenchmarkGraph`] with [`random_grid`], [`netmaker`], [`guards_grid`]
+//!   and [`road_extended`]: the standardized benchmark suite of Peer et al.,
+//!   generated from its definitions.
 //! - [`Epsilon`]: a rational tolerance `ε = num / den` for the approximate
 //!   searches, tested with [`Cost::saturating_times`].
 //!
@@ -84,6 +87,7 @@ extern crate std;
 mod aggregate;
 mod anytime_boa;
 mod apex;
+mod benchmarks;
 mod boa;
 mod boba;
 mod bottleneck;
@@ -119,6 +123,9 @@ pub use anytime_boa::{
     boa_star_anytime_ws,
 };
 pub use apex::{MergeRule, apex_star, apex_star_with};
+pub use benchmarks::{
+    BenchmarkGraph, Query, guards_grid, netmaker, netmaker_queries, random_grid, road_extended,
+};
 pub use boa::{boa_star, boa_star_approx, boa_star_eps};
 pub use boba::{boba_star, boba_star_with};
 #[cfg(feature = "parallel")]

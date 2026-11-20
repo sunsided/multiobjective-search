@@ -6,6 +6,7 @@ mod aggregate;
 mod anytime;
 mod apex;
 mod approx;
+mod benchmarks;
 mod boa;
 mod boba;
 mod brute_force;

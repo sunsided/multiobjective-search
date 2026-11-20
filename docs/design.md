@@ -396,6 +396,24 @@ against brute force over the aggregated front.
 | Returns the aggregated front (Theorem 1) | plus a final Pareto filter of the aggregated costs, and the hidden cost of each solution | matches |
 | Applications (POI coverage, shadows, road types) | not built in; expressed by the caller's `extend` and `aggregate` | deliberate |
 
+### Benchmark suite of Peer et al.
+
+H. Peer, C. Hernández, S. Koenig, A. Felner, O. Salzman. "Bridging the
+Evaluation Gap: Standardized Benchmarks for Multi-Objective Search."
+arXiv 2603.24084. The suite's data is public on GitHub but large, and no
+licence is stated, so nothing is downloaded or bundled; `benchmarks.rs`
+generates instances from the paper's definitions, and the `suite` bench
+group runs the exact and approximate searches on them.
+
+| Family (section) | Here | Status |
+|---|---|---|
+| Random-cost grids `Grid_2`, `Grid_3`: four-connected, costs uniform in `[1, 10]` per objective, auxiliary source and target on the left and right columns (4.3) | `random_grid` | matches the definition; seeds are ours, so the instances are not the released ones |
+| NetMaker: Hamiltonian cycle with one cost from each of `[1, 333]`, `[334, 666]`, `[667, 1000]` in random order, local edges within the identifier window with costs in `[1, 99]`, out-degree from `amin + 1..=amax` (4.3) | `netmaker`, `netmaker_queries` (sources in the first, targets in the last tenth) | matches the definition; seeds are ours |
+| GUARDS grids: eight-connected, length 10/14, exposure from the number of guards with line of sight, diagonal cost the maximum over destination and side cells (4.4) | `guards_grid` from a Moving AI map and guard cells, Bresenham line of sight | matches the definition; the maps and guard placements are inputs |
+| DIMACS NY/FLA and DIMACS-Extended: elevation difference, average endpoint out-degree, hop count (4.2) | `RoadGraph` loads DIMACS; `road_extended` adds the three objectives (out-degree as the sum, twice the average, to stay integral; elevation is an input) and `BenchmarkGraph::project` picks variants | deliberate: integral out-degree objective |
+| GER_10, robot motion-planning roadmaps (4.2, 4.5) | load with `BenchmarkGraph::from_arcs` | not generated: they need the suite's data |
+| Reference Pareto sets, ε-dominance protocol | the property tests compare against brute force; `ApproxFactor`-style checks cover ε | the released reference sets are not used |
+
 ### Parallel MOA* against Ahmadi et al.
 
 `parallel_moa_star` (feature `parallel`); `tests/it/parallel_moa.rs`
