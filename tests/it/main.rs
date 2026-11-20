@@ -17,3 +17,5 @@ mod namoa;
 #[cfg(feature = "parallel")]
 mod parallel;
 mod reference;
+#[cfg(feature = "parallel")]
+mod sip;

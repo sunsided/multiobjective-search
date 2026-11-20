@@ -48,7 +48,8 @@
 //!
 //! - `std`: links `std`; no API of its own.
 //! - `parallel` (implies `std`): multi-threaded BOBA*,
-//!   `boba_star_parallel` and `boba_star_with_parallel`.
+//!   `boba_star_parallel` and `boba_star_with_parallel`, and SIP-MOSP
+//!   (`sip_mosp`), an asynchronous parallel exact search for any `N`.
 //!
 //! Without features the crate is `no_std` with `alloc`.
 //!
@@ -82,6 +83,8 @@ mod output;
 mod pareto;
 mod pp_a;
 mod reference;
+#[cfg(feature = "parallel")]
+mod sip;
 
 pub use anytime_boa::{
     AnytimeFront, ApproxFactor, WeightedSum, boa_star_anytime, boa_star_anytime_basic,
@@ -101,7 +104,9 @@ pub use mvh::{MvHeuristic, MvHeuristicFn, MvhTable, SingleValued, apex_mvh, mv_h
 pub use namoa::{namoa_star, namoa_star_dr};
 pub use namoa_mvh::{namoa_star_dr_mvh, namoa_star_dr_mvh_lazy};
 pub use output::{Output, Solution, Stats};
-pub use pareto::{BiFront, Front, TreeFront};
+pub use pareto::{BiFront, Front, FrontIndex, IndexedFront, TreeFront};
 pub use pp_a::{pp_a_star, pp_a_star_iterative};
 pub use reference::brute_force;
 pub use search_core::{Cost, Heuristic, HeuristicFn, heuristic_fn};
+#[cfg(feature = "parallel")]
+pub use sip::{SipConfig, sip_mosp};

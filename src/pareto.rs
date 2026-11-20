@@ -1,5 +1,6 @@
 //! Pareto frontiers of cost vectors.
 
+mod indexed;
 mod tree;
 mod truncated;
 
@@ -9,6 +10,7 @@ use search_core::Cost;
 
 use crate::cost::weakly_dominates;
 
+pub use indexed::{FrontIndex, IndexedFront};
 pub use tree::TreeFront;
 pub(crate) use truncated::{TruncatedFront, TruncatedTree};
 

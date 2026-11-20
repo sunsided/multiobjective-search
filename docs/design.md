@@ -220,6 +220,10 @@ for sol in &out.solutions {
 - **A-BOA\*ε:** "Anytime Approximate Bi-Objective Search" (anonymous
   preprint, crl.cs.technion.ac.il). Checked against its Algorithms 1 to 3
   and Section 5; see the table below.
+- **SIP-MOSP:** X. Xu, N. Zhang, L. Qian, X. Liu, J. Wu, H. Tang.
+  "Asynchronous Parallel Search for Exact Multi-Objective Shortest Paths
+  with Versioned Frontier Snapshots and Indexed Dominance Pruning." arXiv
+  2609.11944, 2026.
 - **EMOA\*:** Z. Ren, R. Zhan, S. Rathinam, M. Likhachev, H. Choset.
   "Enhanced Multi-Objective A* Using Balanced Binary Search Trees." SoCS
   2022.
@@ -344,6 +348,34 @@ paths or weakening the weighted-sum test fails it.
 | Anytime: solutions can be read off `ILIST` at any time | `on_front` after seeding and whenever the overall factor falls; `Budget<Stats>` stops the search, folding the unexplored open paths into the current interval so the reported factor stays a valid bound | deliberate, follows `heuristic-search`'s anytime callbacks |
 | Single goal | goal predicate; one `g2_min` over all goals | deliberate, as everywhere in the crate |
 | Iterative-PP-A* baseline: PP-A* from scratch for `ε = 0.01, 0.001, 0.0001, 0` | `pp_a_star_iterative` with a caller's schedule (the paper's in the bench), same `on_front`, `Budget` and `AnytimeFront`; reports a run when its `ε` lowers the factor; the budget is checked between runs | matches. `ε` becomes an `ApproxFactor` scaled by the smallest positive solution cost, since `Cost` has no unit |
+
+### SIP-MOSP against Xu et al. 2026
+
+`sip_mosp` (feature `parallel`) and the reusable `IndexedFront`.
+`tests/it/sip.rs` runs every property case with four worker and index
+configurations, two or three times each, against brute force (two to
+four objectives) and NAMOA* (larger graphs, and a layered graph whose
+front of over 64 vectors exercises indexed snapshots and deltas).
+
+| Paper rule | Here | Status |
+|---|---|---|
+| `R` search workers, `P` update workers owning disjoint vertex sets, one goal-update worker (Alg. 1) | same; owner by hash of the state (`G::State: Hash`), `std::thread::scope` | matches |
+| Per-worker multi-producer incoming queue, private best-first queue | `Mutex<Vec>` plus `Condvar` inbox, private `BinaryHeap` | matches |
+| Search worker: cyclic objective order `π_r`, expand, prune children by endpoint snapshot on `g` and goal snapshot on `f`, send to the owner (Alg. 2) | same; worker `r` orders by `f` rotated to start at objective `r mod N` | matches |
+| Update worker: reuse a negative result if the carried version is current, else re-query; `F_v ← F_v \ {z : g ⪯ z} ∪ {g}`; publish; hand to the less loaded of two hashed search workers (Alg. 3) | same | matches; the canonical `Front::insert` also rejects a weakly dominated `g`, so a stale reuse cannot admit one |
+| Snapshot `(B, Δ, I, k)`: sorted base, recent delta with its minimum, index over the base; base only below `θ_I`; consolidate when the delta is full (Section IV.B) | same; `θ_I = 64`, delta capacity `max(8, |F| / 8)`; the base is an `Arc` shared between versions | matches; thresholds are ours (the paper gives none) |
+| `SnapshotDominates`: delta guarded by its minimum, binary-searched lexicographic prefix, then block-minimum (BM) or segment-tree (ST) index (Algs. 4, 5) | `Snapshot::dominates` and `IndexedFront` with `FrontIndex::{None, Blocks, Tree}`, block size 16 | matches |
+| Publication of immutable snapshots | per-owner `RwLock<HashMap<state, Arc<Snapshot>>>`; readers clone an `Arc` under a short read lock | deliberate: no atomic pointer swap without dependencies |
+| Termination on stable global quiescence, checked by repeated observation | one atomic count of labels sent but not yet processed; the last `finish` stops all workers | deliberate: simpler, same condition (the paper avoids the counter for speed) |
+| Lower bounds: exact per-objective Dijkstra | any admissible heuristic, cloned per search worker | deliberate |
+| Single goal `t` | goal predicate; all goals share the goal worker | deliberate, as everywhere |
+| Indexed pruning as a sequential frontier | `IndexedFront` is public; on a 16000-vector four-objective antichain the block index answers 2000 queries in 107 ms against 120 ms for `Front` (the tree index is slower), so the sequential searches keep `Front` | measured; not adopted |
+
+Bench (20 hardware threads, machine under load): on the 10x10
+three-objective grid NAMOA*dr takes 2.9 ms and SIP-MOSP 4.1 ms (4 + 4
+workers, blocks) to 7.2 ms (2 + 2); on the 24x24 two-objective grid
+parallel BOBA* takes 5.5 ms and SIP-MOSP 15 to 21 ms. These graphs are
+far smaller than the paper's, where coordination is amortized.
 
 ## Testing strategy
 

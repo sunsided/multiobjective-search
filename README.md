@@ -41,6 +41,9 @@ reference on random graphs with two to four objectives:
       `TreeFront`): a treap with per-subtree bounding boxes, cross-checked
       against the `Vec` frontier; slower than the `Vec` on the crate's
       benchmarks, so `emoa_star` keeps the `Vec`
+- [x] SIP-MOSP: asynchronous parallel exact search with versioned frontier
+      snapshots and indexed dominance pruning (`sip_mosp`, feature
+      `parallel`), and its indexed frontier (`IndexedFront`, `FrontIndex`)
 - [x] Brute-force reference over simple paths (`brute_force`)
 - [x] Pareto frontier for any number of objectives, `O(log n)` queries for two
       (`Front`, `BiFront`)

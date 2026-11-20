@@ -6,11 +6,11 @@ use std::hint::black_box;
 
 use criterion::Criterion;
 use multiobjective_search::{
-    Epsilon, Front, Graph, MvHeuristic, ReverseGraph, RoadGraph, SingleValued, TreeFront,
-    WeightedSum, ZeroHeuristic, apex_mvh, apex_star, boa_star, boa_star_anytime,
-    boa_star_anytime_basic, boa_star_anytime_ws, boa_star_eps, boba_star, emoa_star,
-    emoa_star_tree, heuristic_fn, mv_heuristic_fn, namoa_star, namoa_star_dr, namoa_star_dr_mvh,
-    namoa_star_dr_mvh_lazy, pp_a_star, pp_a_star_iterative,
+    Epsilon, Front, FrontIndex, Graph, IndexedFront, MvHeuristic, ReverseGraph, RoadGraph,
+    SingleValued, TreeFront, WeightedSum, ZeroHeuristic, apex_mvh, apex_star, boa_star,
+    boa_star_anytime, boa_star_anytime_basic, boa_star_anytime_ws, boa_star_eps, boba_star,
+    emoa_star, emoa_star_tree, heuristic_fn, mv_heuristic_fn, namoa_star, namoa_star_dr,
+    namoa_star_dr_mvh, namoa_star_dr_mvh_lazy, pp_a_star, pp_a_star_iterative,
 };
 
 /// Runs every benchmark in this file with criterion's command-line flags.
@@ -25,6 +25,9 @@ fn main() {
     bench_multi_valued(&mut criterion);
     bench_front(&mut criterion);
     bench_front_four(&mut criterion);
+    bench_indexed_query(&mut criterion);
+    #[cfg(feature = "parallel")]
+    bench_sip(&mut criterion);
     criterion.final_summary();
 }
 
@@ -428,6 +431,110 @@ fn bench_front_four(c: &mut Criterion) {
         });
         group.finish();
     }
+}
+
+/// Dominance queries against a 16000-vector four-objective antichain:
+/// the plain frontier against the indexed snapshot bases of SIP-MOSP.
+fn bench_indexed_query(c: &mut Criterion) {
+    let points = antichain(16_000);
+    let mut front = Front::new();
+    for p in &points {
+        front.insert(*p);
+    }
+
+    // Queries near the antichain: about half are dominated.
+    let queries: Vec<[u32; 4]> = antichain(2000)
+        .into_iter()
+        .map(|mut q| {
+            q[3] += 200;
+            q
+        })
+        .collect();
+    let mut group = c.benchmark_group("front_query_16000_4obj");
+
+    group.bench_function("vec", |b| {
+        b.iter(|| {
+            queries
+                .iter()
+                .filter(|q| front.weakly_dominates(black_box(q)))
+                .count()
+        });
+    });
+    for (name, index) in [
+        ("indexed_none", FrontIndex::None),
+        ("indexed_blocks", FrontIndex::Blocks),
+        ("indexed_tree", FrontIndex::Tree),
+    ] {
+        let indexed = IndexedFront::new(front.as_slice().to_vec(), index);
+        group.bench_function(name, |b| {
+            b.iter(|| {
+                queries
+                    .iter()
+                    .filter(|q| indexed.weakly_dominates(black_box(q)))
+                    .count()
+            });
+        });
+    }
+
+    group.finish();
+}
+
+/// SIP-MOSP against sequential NAMOA*dr on a three-objective grid and
+/// against multi-threaded BOBA* on a two-objective one, uninformed except
+/// BOBA*.
+#[cfg(feature = "parallel")]
+fn bench_sip(c: &mut Criterion) {
+    use multiobjective_search::{SipConfig, boba_star_parallel, sip_mosp};
+
+    let configs = [
+        ("sip_bm_2x2", SipConfig::default()),
+        (
+            "sip_bm_4x4",
+            SipConfig {
+                search_workers: 4,
+                update_workers: 4,
+                index: FrontIndex::Blocks,
+            },
+        ),
+        (
+            "sip_st_4x4",
+            SipConfig {
+                search_workers: 4,
+                update_workers: 4,
+                index: FrontIndex::Tree,
+            },
+        ),
+    ];
+
+    let grid = Grid::<3> { side: 10 };
+    let goal = grid.goal();
+    let is_goal = |s: &u32| *s == goal;
+    let mut group = c.benchmark_group("grid_10x10_3obj_parallel");
+    group.sample_size(20);
+    group.bench_function("namoa_star_dr", |b| {
+        b.iter(|| namoa_star_dr(&grid, ZeroHeuristic, black_box(0), is_goal));
+    });
+    for (name, config) in configs {
+        group.bench_function(name, |b| {
+            b.iter(|| sip_mosp(&grid, ZeroHeuristic, black_box(0), is_goal, config));
+        });
+    }
+    group.finish();
+
+    let grid = Grid::<2> { side: 24 };
+    let goal = grid.goal();
+    let is_goal = |s: &u32| *s == goal;
+    let mut group = c.benchmark_group("grid_24x24_2obj_parallel");
+    group.sample_size(20);
+    group.bench_function("boba_star_parallel", |b| {
+        b.iter(|| boba_star_parallel(&grid, black_box(0), goal));
+    });
+    for (name, config) in configs {
+        group.bench_function(name, |b| {
+            b.iter(|| sip_mosp(&grid, ZeroHeuristic, black_box(0), is_goal, config));
+        });
+    }
+    group.finish();
 }
 
 /// `size` pseudo-random four-objective points whose coordinates sum to
