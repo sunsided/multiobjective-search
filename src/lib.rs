@@ -38,6 +38,7 @@ mod graph;
 mod namoa;
 mod output;
 mod pareto;
+mod reference;
 
 pub use boa::{boa_star, boa_star_approx};
 pub use boba::boba_star;
@@ -47,3 +48,4 @@ pub use graph::{Graph, Heuristic, ReverseGraph, ZeroHeuristic};
 pub use namoa::{namoa_star, namoa_star_dr};
 pub use output::{Output, Solution, Stats};
 pub use pareto::{BiFront, Front};
+pub use reference::brute_force;
