@@ -22,4 +22,9 @@ pedantic = { level = "warn", priority = -1 }
 missing_docs_in_private_items = "warn"
 
 [dev-dependencies]
+criterion = "0.8.2"
 proptest = "1"
+
+[[bench]]
+name = "search"
+harness = false
