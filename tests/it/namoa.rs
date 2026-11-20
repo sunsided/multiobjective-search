@@ -3,7 +3,7 @@
 //! against BOA* for two.
 
 use multiobjective_search::{
-    Heuristic, Output, ZeroHeuristic, boa_star, emoa_star, namoa_star, namoa_star_dr,
+    Heuristic, Output, ZeroHeuristic, boa_star, emoa_star, heuristic_fn, namoa_star, namoa_star_dr,
 };
 use proptest::prelude::*;
 
@@ -25,7 +25,7 @@ enum Algorithm {
 fn solve<H: Heuristic<usize, [u32; N]>, const N: usize>(
     algorithm: Algorithm,
     problem: &Problem<N>,
-    heuristic: &H,
+    heuristic: H,
 ) -> Output<usize, [u32; N]> {
     let goal = |v: &usize| problem.goals[*v];
     let (graph, start) = (&problem.graph, problem.start);
@@ -41,17 +41,17 @@ fn solve<H: Heuristic<usize, [u32; N]>, const N: usize>(
 /// classic NAMOA* also with an admissible, inconsistent heuristic.
 fn check_all<const N: usize>(problem: &Problem<N>, zeroed: &[bool]) -> Result<(), TestCaseError> {
     let exact = exact_heuristic(problem);
-    let exact = |v: &usize| exact[*v];
+    let exact = heuristic_fn(|v: &usize| exact[*v]);
     let patchy = patchy_heuristic(problem, zeroed);
-    let patchy = |v: &usize| patchy[*v];
+    let patchy = heuristic_fn(|v: &usize| patchy[*v]);
 
-    check(problem, &solve(Algorithm::Namoa, problem, &ZeroHeuristic))?;
-    check(problem, &solve(Algorithm::Namoa, problem, &exact))?;
-    check(problem, &solve(Algorithm::Namoa, problem, &patchy))?;
-    check(problem, &solve(Algorithm::NamoaDr, problem, &ZeroHeuristic))?;
-    check(problem, &solve(Algorithm::NamoaDr, problem, &exact))?;
-    check(problem, &solve(Algorithm::Emoa, problem, &ZeroHeuristic))?;
-    check(problem, &solve(Algorithm::Emoa, problem, &exact))?;
+    check(problem, &solve(Algorithm::Namoa, problem, ZeroHeuristic))?;
+    check(problem, &solve(Algorithm::Namoa, problem, exact))?;
+    check(problem, &solve(Algorithm::Namoa, problem, patchy))?;
+    check(problem, &solve(Algorithm::NamoaDr, problem, ZeroHeuristic))?;
+    check(problem, &solve(Algorithm::NamoaDr, problem, exact))?;
+    check(problem, &solve(Algorithm::Emoa, problem, ZeroHeuristic))?;
+    check(problem, &solve(Algorithm::Emoa, problem, exact))?;
 
     Ok(())
 }
@@ -76,11 +76,11 @@ fn problem(
 /// Every algorithm on `problem` with the zero and the exact heuristic.
 fn outputs(problem: &Problem<3>) -> Vec<Output<usize, [u32; 3]>> {
     let exact = exact_heuristic(problem);
-    let exact = |v: &usize| exact[*v];
+    let exact = heuristic_fn(|v: &usize| exact[*v]);
 
     [Algorithm::Namoa, Algorithm::NamoaDr, Algorithm::Emoa]
         .into_iter()
-        .flat_map(|a| [solve(a, problem, &ZeroHeuristic), solve(a, problem, &exact)])
+        .flat_map(|a| [solve(a, problem, ZeroHeuristic), solve(a, problem, exact)])
         .collect()
 }
 
@@ -165,14 +165,14 @@ proptest! {
     #[test]
     fn agrees_with_boa(p in problems::<2>()) {
         let h = exact_heuristic(&p);
-        let h = |v: &usize| h[*v];
+        let h = heuristic_fn(|v: &usize| h[*v]);
         let costs = |out: Output<usize, [u32; 2]>| -> Vec<_> {
             out.solutions.into_iter().map(|s| s.cost).collect()
         };
-        let expected = costs(boa_star(&p.graph, &h, p.start, |v| p.goals[*v]));
+        let expected = costs(boa_star(&p.graph, h, p.start, |v| p.goals[*v]));
 
         for algorithm in [Algorithm::Namoa, Algorithm::NamoaDr, Algorithm::Emoa] {
-            prop_assert_eq!(costs(solve(algorithm, &p, &h)), expected.clone());
+            prop_assert_eq!(costs(solve(algorithm, &p, h)), expected.clone());
         }
     }
 }

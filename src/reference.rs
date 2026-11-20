@@ -3,7 +3,9 @@
 use alloc::collections::BTreeSet;
 use alloc::vec::Vec;
 
-use crate::cost::{Cost, Dominates, add};
+use search_core::Cost;
+
+use crate::cost::{Dominates, add};
 use crate::graph::Graph;
 use crate::output::{Output, Solution, Stats};
 
@@ -47,7 +49,7 @@ use crate::output::{Output, Solution, Stats};
 /// }
 ///
 /// let reference = brute_force(&Routes, 0, |s| *s == 1);
-/// let search = namoa_star(&Routes, &ZeroHeuristic, 0, |s| *s == 1);
+/// let search = namoa_star(&Routes, ZeroHeuristic, 0, |s| *s == 1);
 /// assert_eq!(reference.solutions, search.solutions);
 /// ```
 pub fn brute_force<G, C, P, const N: usize>(
@@ -68,7 +70,7 @@ where
         found: Vec::new(),
         stats: Stats::default(),
     };
-    enumeration.visit(start, [C::default(); N]);
+    enumeration.visit(start, [C::ZERO; N]);
 
     Output {
         solutions: non_dominated(enumeration.found),

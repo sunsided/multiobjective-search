@@ -24,8 +24,10 @@ use alloc::vec::Vec;
 use core::cmp::Reverse;
 use core::mem;
 
-use crate::cost::{Cost, add};
-use crate::graph::{Graph, Heuristic};
+use search_core::{Cost, Heuristic};
+
+use crate::cost::add;
+use crate::graph::Graph;
 use crate::output::{Output, Solution, Stats};
 
 /// Finds one path for every Pareto-optimal cost vector from `start` to a
@@ -61,14 +63,14 @@ use crate::output::{Output, Solution, Stats};
 ///     }
 /// }
 ///
-/// let out = boa_star(&Routes, &ZeroHeuristic, 0, |s| *s == 2);
+/// let out = boa_star(&Routes, ZeroHeuristic, 0, |s| *s == 2);
 /// let costs: Vec<_> = out.solutions.iter().map(|s| s.cost).collect();
 /// assert_eq!(costs, [[2, 10], [4, 1]]);
 /// assert_eq!(out.solutions[0].path, [0, 1, 2]);
 /// ```
 pub fn boa_star<G, H, C, P>(
     graph: &G,
-    heuristic: &H,
+    heuristic: H,
     start: G::State,
     is_goal: P,
 ) -> Output<G::State, [C; 2]>
@@ -78,7 +80,7 @@ where
     C: Cost,
     P: Fn(&G::State) -> bool,
 {
-    boa_star_approx(graph, heuristic, start, is_goal, C::default())
+    boa_star_approx(graph, heuristic, start, is_goal, C::ZERO)
 }
 
 /// [`boa_star`] with an additive tolerance `slack` on the second
@@ -100,8 +102,9 @@ where
 /// This is an additive simplification of the multiplicative BOA*ε and
 /// PP-A* (Goldin and Salzman, "Approximate bi-criteria search by efficient
 /// representation of subsets of the Pareto-optimal frontier", ICAPS 2021),
-/// which relax both objectives by a factor `1 + ε`. [`Cost`] has no
-/// multiplication, so a factor is not expressible here.
+/// which relax both objectives by a factor `1 + ε`. [`Cost`] only scales by
+/// integer factors (`saturating_times`), so a rational factor is left to a
+/// separate entry point.
 ///
 /// `f2 + slack` must not overflow `C`: a slack near `C::MAX` panics in
 /// debug builds and wraps in release builds.
@@ -125,13 +128,13 @@ where
 ///     }
 /// }
 ///
-/// let out = boa_star_approx(&Routes, &ZeroHeuristic, 0, |s| *s == 1, 1);
+/// let out = boa_star_approx(&Routes, ZeroHeuristic, 0, |s| *s == 1, 1);
 /// let costs: Vec<_> = out.solutions.iter().map(|s| s.cost).collect();
 /// assert_eq!(costs, [[1, 3], [3, 1]]); // [2, 2] is within 1 of [1, 3]
 /// ```
 pub fn boa_star_approx<G, H, C, P>(
     graph: &G,
-    heuristic: &H,
+    heuristic: H,
     start: G::State,
     is_goal: P,
     slack: C,
@@ -167,7 +170,7 @@ pub(crate) struct Search<'a, G: Graph, H, C, P> {
     /// The graph being searched.
     graph: &'a G,
     /// Per-objective lower bounds on the remaining cost.
-    heuristic: &'a H,
+    heuristic: H,
     /// Goal test.
     is_goal: P,
     /// Additive tolerance on the second objective when pruning by
@@ -205,7 +208,7 @@ where
     P: Fn(&G::State) -> bool,
 {
     /// Creates an empty search with no labels.
-    pub(crate) fn new(graph: &'a G, heuristic: &'a H, is_goal: P, slack: C) -> Self {
+    pub(crate) fn new(graph: &'a G, heuristic: H, is_goal: P, slack: C) -> Self {
         Self {
             graph,
             heuristic,
@@ -264,7 +267,7 @@ where
     /// Pushes the start label, unless the heuristic reports it as a dead end.
     pub(crate) fn push_start(&mut self, start: G::State) {
         if let Some(h) = self.heuristic.estimate(&start) {
-            self.push(start, [C::default(); 2], h, None);
+            self.push(start, [C::ZERO; 2], h, None);
         }
     }
 
@@ -319,7 +322,7 @@ where
         self.g2_min.get(state).is_some_and(|&min| g2 >= min)
             || self
                 .best_goal_g2
-                // shortcut: additive slack only, multiplicative (1 + eps) needs Mul on Cost.
+                // shortcut: additive slack only; a rational (1 + eps) could use Cost::saturating_times.
                 .is_some_and(|best| f[1] + self.slack >= best)
             || self.primary_bound.is_some_and(|bound| f[0] >= bound)
     }

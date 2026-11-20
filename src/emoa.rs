@@ -20,9 +20,10 @@
 //! - four or more: a scan of the lexicographic prefix that can dominate,
 //!   where the paper prunes a tree traversal.
 
-use crate::cost::Cost;
+use search_core::{Cost, Heuristic};
+
 use crate::frontier_search;
-use crate::graph::{Graph, Heuristic};
+use crate::graph::Graph;
 use crate::output::Output;
 use crate::pareto::TruncatedFront;
 
@@ -57,13 +58,13 @@ use crate::pareto::TruncatedFront;
 ///     }
 /// }
 ///
-/// let out = emoa_star(&Line, &ZeroHeuristic, 0, |s| *s == 2);
+/// let out = emoa_star(&Line, ZeroHeuristic, 0, |s| *s == 2);
 /// let costs: Vec<_> = out.solutions.iter().map(|s| s.cost).collect();
 /// assert_eq!(costs, [[2, 4, 0], [3, 3, 0], [4, 2, 0]]);
 /// ```
 pub fn emoa_star<G, H, C, P, const N: usize>(
     graph: &G,
-    heuristic: &H,
+    heuristic: H,
     start: G::State,
     is_goal: P,
 ) -> Output<G::State, [C; N]>

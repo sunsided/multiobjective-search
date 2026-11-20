@@ -25,6 +25,25 @@ Open:
 - [ ] Multiplicative `(1 + ε)` approximation (BOA*ε, PP-A*)
 - [ ] DIMACS road-network benchmarks
 
+## Breaking changes
+
+Adopting `search-core` (unreleased, after 0.0.0) changed the public API:
+
+- `Cost` is now `search_core::Cost`, re-exported from the crate root. It has
+  no blanket impl: it is implemented for the unsigned integers and
+  `search_core::Decimal`. A user-defined cost type must implement `Cost`
+  (with `ZERO`, `saturating_add` and `saturating_times`); signed integers no
+  longer qualify.
+- `Heuristic` is now `search_core::Heuristic`, re-exported, with
+  `estimate(&mut self, ..)`. Closures are no longer heuristics by
+  themselves: wrap them in `heuristic_fn` (also re-exported).
+- `boa_star`, `boa_star_approx`, `emoa_star`, `namoa_star` and
+  `namoa_star_dr` take the heuristic by value instead of `&H`. Pass
+  `ZeroHeuristic` or `heuristic_fn(..)` directly, or `&mut h` to keep `h`.
+
+`Dominates`, `Graph`, `ReverseGraph`, `ZeroHeuristic`, `Front`, `BiFront`,
+`Output` and `Stats` are unchanged.
+
 ## Status
 
 Pre-release. Version 0.0.0 reserves the name; the API is a draft and will change.

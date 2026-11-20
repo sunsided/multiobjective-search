@@ -29,8 +29,10 @@ use alloc::vec::Vec;
 use core::cmp::Reverse;
 use core::mem;
 
-use crate::cost::{Cost, add, weakly_dominates};
-use crate::graph::{Graph, Heuristic};
+use search_core::{Cost, Heuristic};
+
+use crate::cost::{add, weakly_dominates};
+use crate::graph::Graph;
 use crate::output::{Output, Solution, Stats};
 use crate::pareto::{Front, TruncatedFront};
 
@@ -85,7 +87,7 @@ impl<C: Cost, const N: usize> Archive<C, N> for TruncatedFront<C, N> {
 /// the heuristic requirements of the chosen combination.
 pub(crate) fn run<G, H, C, P, A, const N: usize>(
     graph: &G,
-    heuristic: &H,
+    heuristic: H,
     start: G::State,
     is_goal: P,
     track_open: bool,
@@ -139,7 +141,7 @@ struct Search<'a, G: Graph, H, C, P, A, const N: usize> {
     /// The graph being searched.
     graph: &'a G,
     /// Per-objective lower bounds on the remaining cost.
-    heuristic: &'a H,
+    heuristic: H,
     /// Goal test.
     is_goal: P,
     /// Whether [`StateLabels::open`] is maintained and checked.
@@ -170,7 +172,7 @@ where
     A: Archive<C, N>,
 {
     /// Creates an empty search with no labels.
-    fn new(graph: &'a G, heuristic: &'a H, is_goal: P, track_open: bool) -> Self {
+    fn new(graph: &'a G, heuristic: H, is_goal: P, track_open: bool) -> Self {
         Self {
             graph,
             heuristic,
@@ -189,7 +191,7 @@ where
     /// Pushes the start label, unless the heuristic reports it as a dead end.
     fn push_start(&mut self, start: G::State) {
         if let Some(h) = self.heuristic.estimate(&start) {
-            self.push(start, [C::default(); N], h, None);
+            self.push(start, [C::ZERO; N], h, None);
         }
     }
 

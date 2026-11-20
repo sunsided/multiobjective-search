@@ -8,7 +8,8 @@
 //! That drops one dimension: three objectives become a two-dimensional
 //! frontier with `O(log n)` queries.
 
-use crate::cost::Cost;
+use search_core::Cost;
+
 use crate::pareto::Front;
 
 /// Pareto frontier over objectives `1..N` of `N`-objective vectors.
@@ -57,7 +58,7 @@ impl<C: Cost, const N: usize> TruncatedFront<C, N> {
 /// Returns `point` with its first component replaced by zero.
 fn zero_first<C: Cost, const N: usize>(mut point: [C; N]) -> [C; N] {
     if let Some(first) = point.first_mut() {
-        *first = C::default();
+        *first = C::ZERO;
     }
 
     point

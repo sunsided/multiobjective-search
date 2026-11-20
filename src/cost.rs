@@ -1,22 +1,10 @@
-//! Cost values, cost vectors and Pareto dominance.
+//! Cost vectors and Pareto dominance.
 //!
-//! A cost vector is a plain array `[C; N]` of a [`Cost`] type. Arrays already
-//! provide `Copy`, lexicographic `Ord` and a zero via `Default`, so no newtype
-//! is needed.
+//! A cost vector is a plain array `[C; N]` of a scalar [`Cost`] from
+//! `search-core`. Arrays already provide `Copy` and lexicographic `Ord`, and
+//! `[C::ZERO; N]` is the zero vector, so no newtype is needed.
 
-use core::ops::Add;
-
-/// A scalar edge or path cost in one objective.
-///
-/// `Default` must be the zero of the type. Costs must be non-negative: every
-/// algorithm in this crate assumes that extending a path never makes it
-/// cheaper. Unsigned integers are the intended types. Overflow behaves like
-/// the underlying type (a panic in debug builds).
-///
-/// Blanket-implemented for every type that satisfies the bounds.
-pub trait Cost: Copy + Ord + Add<Output = Self> + Default {}
-
-impl<T: Copy + Ord + Add<Output = T> + Default> Cost for T {}
+use search_core::Cost;
 
 /// Pareto dominance between cost vectors.
 pub trait Dominates {

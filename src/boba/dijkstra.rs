@@ -4,7 +4,7 @@ use alloc::collections::{BTreeMap, BinaryHeap};
 use alloc::vec::Vec;
 use core::cmp::Reverse;
 
-use crate::cost::Cost;
+use search_core::Cost;
 
 /// Exact shortest distances from one source, computed independently for
 /// each of the two objectives.
@@ -41,8 +41,8 @@ fn shortest<S: Clone + Ord, C: Cost>(
     let mut dist = BTreeMap::new();
     let mut open = BinaryHeap::new();
     let mut edges = Vec::new();
-    dist.insert(source.clone(), C::default());
-    open.push(Reverse((C::default(), source.clone())));
+    dist.insert(source.clone(), C::ZERO);
+    open.push(Reverse((C::ZERO, source.clone())));
 
     while let Some(Reverse((d, state))) = open.pop() {
         if dist.get(&state).is_some_and(|&best| best < d) {

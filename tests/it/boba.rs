@@ -1,7 +1,7 @@
 //! BOBA* tests: fixed cases and property-based cross-checks against the
 //! brute-force reference and BOA*.
 
-use multiobjective_search::{Output, boa_star, boba_star};
+use multiobjective_search::{Output, boa_star, boba_star, heuristic_fn};
 use proptest::prelude::*;
 
 use crate::check::check;
@@ -105,7 +105,7 @@ proptest! {
         let costs = |out: Output<usize, [u32; 2]>| -> Vec<_> {
             out.solutions.into_iter().map(|s| s.cost).collect()
         };
-        let boa = boa_star(&p.graph, &|v: &usize| h[*v], p.start, |v| p.goals[*v]);
+        let boa = boa_star(&p.graph, heuristic_fn(|v: &usize| h[*v]), p.start, |v| p.goals[*v]);
 
         prop_assert_eq!(costs(solve(&p)), costs(boa));
     }

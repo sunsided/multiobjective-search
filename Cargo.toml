@@ -12,6 +12,7 @@ keywords = ["search", "pareto", "multi-objective", "astar", "pathfinding"]
 categories = ["algorithms", "no-std"]
 
 [dependencies]
+search-core = { path = "../search-core", version = "0.0.0" }
 
 [lints.rust]
 missing_docs = "warn"

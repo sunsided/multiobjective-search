@@ -21,15 +21,19 @@
 //!
 //! - [`Front`] and [`BiFront`]: Pareto frontiers, `O(log n)` queries for two
 //!   objectives.
-//! - [`Graph`], [`ReverseGraph`] and [`Heuristic`]: the search-space
-//!   interface.
-//! - [`Cost`] and [`Dominates`]: scalar costs and Pareto dominance.
+//! - [`Graph`] and [`ReverseGraph`]: the search-space interface.
+//! - [`Heuristic`], [`heuristic_fn`] and [`ZeroHeuristic`]: per-objective
+//!   lower bounds. The trait comes from `search-core` and takes `&mut self`;
+//!   algorithms take the heuristic by value, so pass `&mut h` to keep it.
+//! - [`Cost`] (from `search-core`) and [`Dominates`]: scalar costs and
+//!   Pareto dominance.
 //! - [`Output`]: solutions sorted lexicographically by cost, plus counters.
 //!
 //! ## Not implemented
 //!
 //! - A multiplicative `(1 + ε)` approximation such as BOA*ε or PP-A*:
-//!   [`Cost`] has no multiplication.
+//!   [`Cost`] only scales by integer factors, so a rational `1 + ε` needs
+//!   its own entry point.
 //!
 //! ## Status
 //!
@@ -55,10 +59,11 @@ mod reference;
 
 pub use boa::{boa_star, boa_star_approx};
 pub use boba::boba_star;
-pub use cost::{Cost, Dominates, add, weakly_dominates};
+pub use cost::{Dominates, add, weakly_dominates};
 pub use emoa::emoa_star;
-pub use graph::{Graph, Heuristic, ReverseGraph, ZeroHeuristic};
+pub use graph::{Graph, ReverseGraph, ZeroHeuristic};
 pub use namoa::{namoa_star, namoa_star_dr};
 pub use output::{Output, Solution, Stats};
 pub use pareto::{BiFront, Front};
 pub use reference::brute_force;
+pub use search_core::{Cost, Heuristic, HeuristicFn, heuristic_fn};

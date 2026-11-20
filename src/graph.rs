@@ -1,8 +1,9 @@
-//! The search-space interface: successor generation and heuristics.
+//! The search-space interface: successor generation and the zero heuristic
+//! for cost vectors.
 
 use alloc::vec::Vec;
 
-use crate::cost::Cost;
+use search_core::{Cost, Heuristic};
 
 /// An implicit graph with vector-valued edge weights.
 ///
@@ -40,35 +41,16 @@ pub trait ReverseGraph: Graph {
     fn predecessors(&self, state: &Self::State, out: &mut Vec<(Self::State, Self::Weight)>);
 }
 
-/// A per-objective lower bound on the remaining cost to a goal.
+/// The zero heuristic for cost vectors: no estimate, the search is
+/// uninformed.
 ///
-/// Algorithms state their own requirements; BOA* needs every objective to
-/// be consistent (`h(s) <= c(s, t) + h(t)` for every edge) and zero on
-/// every goal state.
-///
-/// Implemented for closures `Fn(&S) -> Option<W>`.
-pub trait Heuristic<S, W> {
-    /// Estimates the remaining cost from `state` to the goal.
-    ///
-    /// Returns `None` when no goal is reachable from `state`; the search
-    /// then prunes it.
-    fn estimate(&self, state: &S) -> Option<W>;
-}
-
-impl<S, W, F: Fn(&S) -> Option<W>> Heuristic<S, W> for F {
-    fn estimate(&self, state: &S) -> Option<W> {
-        self(state)
-    }
-}
-
-/// The zero heuristic: no estimate, the search is uninformed.
-///
-/// Consistent for any graph with non-negative costs.
+/// Consistent for any graph with non-negative costs. `search_core::Zero`
+/// covers scalar costs only, so cost vectors `[C; N]` get this local one.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct ZeroHeuristic;
 
 impl<S, C: Cost, const N: usize> Heuristic<S, [C; N]> for ZeroHeuristic {
-    fn estimate(&self, _state: &S) -> Option<[C; N]> {
-        Some([C::default(); N])
+    fn estimate(&mut self, _state: &S) -> Option<[C; N]> {
+        Some([C::ZERO; N])
     }
 }

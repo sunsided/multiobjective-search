@@ -25,21 +25,22 @@ In scope:
 Out of scope:
 
 - Multiplicative approximate or anytime variants (A*pex, BOA*ε, PP-A*).
-  They need multiplication on costs, which `Cost` does not have. They may
-  come later behind their own entry points.
+  They need a rational factor on costs; `Cost` only has the saturating
+  integer scaling `saturating_times`. They may come later behind their own
+  entry points.
 - Constrained shortest paths (resource-constrained, budgeted). Different
   problem, different output.
-- Any planning-specific model. The crate does not depend on `sas-plus`,
-  `heuristic-search` or other ecosystem crates. Adapters live in the
+- Any planning-specific model. The crate depends only on `search-core`,
+  not on `sas-plus`, `heuristic-search` or other ecosystem crates. Adapters live in the
   consuming crate (for example miniplan).
 
 ## Constraints
 
 - `no_std` with `alloc`. Per-state bookkeeping uses `BTreeMap`, so states
   need `Ord`, not `Hash`.
-- No runtime dependencies. A `hashbrown` feature for `Hash` states is the
-  likely first one, added only when a consumer needs it (see open
-  questions).
+- One runtime dependency, `search-core`, for `Cost` and `Heuristic`. A
+  `hashbrown` feature for `Hash` states would be the next, added only when
+  a consumer needs it (see open questions).
 - `#![forbid(unsafe_code)]`, pedantic clippy, docs on every item.
 - Integer costs. Algorithms compare costs with `Ord` and need exact
   equality for tie handling; floats do not satisfy `Ord`. Costs must be
@@ -49,17 +50,19 @@ Out of scope:
 
 ### Cost
 
-```rust
-pub trait Cost: Copy + Ord + Add<Output = Self> + Default {}
-```
-
-Blanket-implemented. `Default` is the zero. Unsigned integers are the
-intended types; signed integers satisfy the bound but negative edges break
-every algorithm here. Overflow follows the integer type (panic in debug).
+`Cost` is `search_core::Cost`, re-exported from the crate root:
+`Copy + Ord + Add<Output = Self>` with a `ZERO` constant, `saturating_add`
+and `saturating_times`. It is implemented explicitly for the unsigned
+integers and `search_core::Decimal` (plus `NonNegF64` behind search-core's
+`float` feature), so negative costs are unrepresentable. A user-defined
+cost type must implement `Cost` itself. Overflow follows the integer type
+(panic in debug).
 
 A cost vector is a plain array `[C; N]`. No newtype: arrays already have
-`Copy`, `Ord` (lexicographic, which BOA* uses for its open list) and
-`Default`. Vector addition is a free function `add`.
+`Copy` and `Ord` (lexicographic, which BOA* uses for its open list), and
+`[C::ZERO; N]` is the zero. Vector addition is a free function `add`.
+`Dominates`, `weakly_dominates` and `add` stay local: only this crate uses
+Pareto dominance.
 
 ### Dominance
 
@@ -88,15 +91,22 @@ pub trait Graph {
 
 ### Heuristic
 
+`Heuristic` is `search_core::Heuristic`, re-exported from the crate root
+together with `heuristic_fn` and `HeuristicFn`:
+
 ```rust
-pub trait Heuristic<S, W> {
-    fn estimate(&self, state: &S) -> Option<W>;
+pub trait Heuristic<S, C = u32> {
+    fn estimate(&mut self, state: &S) -> Option<C>;
 }
 ```
 
 - `None` means "cannot reach a goal": the state is pruned. This avoids
   infinity sentinels and the overflow they cause in `g + h`.
-- Blanket impl for closures `Fn(&S) -> Option<W>`, plus `ZeroHeuristic`.
+- `&mut self` lets a heuristic keep a workspace. Algorithms take the
+  heuristic by value and own it for the run; pass `&mut h` to keep it.
+- Closures go through `heuristic_fn`; there is no blanket impl for `Fn`.
+- `ZeroHeuristic` stays local: `search_core::Zero` covers scalar costs
+  only, not cost vectors `[C; N]`.
 - BOA* requires a consistent heuristic per objective, zero on every goal.
 
 ### Labels

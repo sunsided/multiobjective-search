@@ -40,8 +40,9 @@ mod dijkstra;
 
 use alloc::vec::Vec;
 
+use search_core::{Cost, heuristic_fn};
+
 use crate::boa::Search;
-use crate::cost::Cost;
 use crate::graph::{Graph, ReverseGraph};
 use crate::output::{Output, Solution, Stats};
 
@@ -112,15 +113,15 @@ where
     // shortcut: full one-to-all Dijkstra; the paper's cost-bounded A* explores less.
     let to_goal = dijkstra::Distances::new(&goal, |s, out| graph.predecessors(s, out));
     let from_start = dijkstra::Distances::new(&start, |s, out| graph.successors(s, out));
-    let forward_h = |s: &G::State| to_goal.get(s);
-    let backward_h = |s: &G::State| from_start.get(s).map(swap);
+    let forward_h = heuristic_fn(|s: &G::State| to_goal.get(s));
+    let backward_h = heuristic_fn(|s: &G::State| from_start.get(s).map(swap));
     let reversed = Reversed(graph);
 
     let is_goal = equals(goal.clone());
     let is_start = equals(start.clone());
 
-    let mut forward = Search::new(graph, &forward_h, is_goal, C::default());
-    let mut backward = Search::new(&reversed, &backward_h, is_start, C::default());
+    let mut forward = Search::new(graph, forward_h, is_goal, C::ZERO);
+    let mut backward = Search::new(&reversed, backward_h, is_start, C::ZERO);
     forward.push_start(start);
     backward.push_start(goal);
 

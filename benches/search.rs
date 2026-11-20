@@ -91,19 +91,19 @@ fn bench_two_objectives(c: &mut Criterion) {
     let mut group = c.benchmark_group("grid_24x24_2obj");
 
     group.bench_function("boa_star", |b| {
-        b.iter(|| boa_star(&grid, &ZeroHeuristic, black_box(0), is_goal));
+        b.iter(|| boa_star(&grid, ZeroHeuristic, black_box(0), is_goal));
     });
     group.bench_function("boba_star", |b| {
         b.iter(|| boba_star(&grid, black_box(0), goal));
     });
     group.bench_function("namoa_star", |b| {
-        b.iter(|| namoa_star(&grid, &ZeroHeuristic, black_box(0), is_goal));
+        b.iter(|| namoa_star(&grid, ZeroHeuristic, black_box(0), is_goal));
     });
     group.bench_function("namoa_star_dr", |b| {
-        b.iter(|| namoa_star_dr(&grid, &ZeroHeuristic, black_box(0), is_goal));
+        b.iter(|| namoa_star_dr(&grid, ZeroHeuristic, black_box(0), is_goal));
     });
     group.bench_function("emoa_star", |b| {
-        b.iter(|| emoa_star(&grid, &ZeroHeuristic, black_box(0), is_goal));
+        b.iter(|| emoa_star(&grid, ZeroHeuristic, black_box(0), is_goal));
     });
     group.finish();
 }
@@ -116,13 +116,13 @@ fn bench_three_objectives(c: &mut Criterion) {
     let mut group = c.benchmark_group("grid_8x8_3obj");
 
     group.bench_function("namoa_star", |b| {
-        b.iter(|| namoa_star(&grid, &ZeroHeuristic, black_box(0), is_goal));
+        b.iter(|| namoa_star(&grid, ZeroHeuristic, black_box(0), is_goal));
     });
     group.bench_function("namoa_star_dr", |b| {
-        b.iter(|| namoa_star_dr(&grid, &ZeroHeuristic, black_box(0), is_goal));
+        b.iter(|| namoa_star_dr(&grid, ZeroHeuristic, black_box(0), is_goal));
     });
     group.bench_function("emoa_star", |b| {
-        b.iter(|| emoa_star(&grid, &ZeroHeuristic, black_box(0), is_goal));
+        b.iter(|| emoa_star(&grid, ZeroHeuristic, black_box(0), is_goal));
     });
     group.finish();
 }

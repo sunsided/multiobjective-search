@@ -1,7 +1,9 @@
 //! BOA* and approximate BOA* tests: fixed cases and property-based
 //! cross-checks against the brute-force reference.
 
-use multiobjective_search::{Heuristic, Output, ZeroHeuristic, boa_star, boa_star_approx};
+use multiobjective_search::{
+    Heuristic, Output, ZeroHeuristic, boa_star, boa_star_approx, heuristic_fn,
+};
 use proptest::prelude::*;
 
 use crate::brute_force::pareto_costs;
@@ -11,7 +13,7 @@ use crate::fixtures::{EdgeList, Problem, exact_heuristic, problems};
 /// Runs BOA* on `problem` with the given heuristic.
 fn solve<H: Heuristic<usize, [u32; 2]>>(
     problem: &Problem<2>,
-    heuristic: &H,
+    heuristic: H,
 ) -> Output<usize, [u32; 2]> {
     boa_star(&problem.graph, heuristic, problem.start, |v| {
         problem.goals[*v]
@@ -21,7 +23,7 @@ fn solve<H: Heuristic<usize, [u32; 2]>>(
 /// Runs BOA* with the exact backward-distance heuristic.
 fn solve_informed(problem: &Problem<2>) -> Output<usize, [u32; 2]> {
     let h = exact_heuristic(problem);
-    solve(problem, &|v: &usize| h[*v])
+    solve(problem, heuristic_fn(|v: &usize| h[*v]))
 }
 
 /// Builds a problem with a single goal.
@@ -45,11 +47,33 @@ fn problem(
 #[test]
 fn start_is_goal() {
     let p = problem(2, &[(0, 1, [1, 1]), (1, 0, [0, 0])], 0, 0);
-    let out = solve(&p, &ZeroHeuristic);
+    let out = solve(&p, ZeroHeuristic);
 
     assert_eq!(out.solutions.len(), 1);
     assert_eq!(out.solutions[0].cost, [0, 0]);
     assert_eq!(out.solutions[0].path, [0]);
+}
+
+/// A heuristic passed as `&mut h` keeps its state after the search, so a
+/// workspace survives the run.
+#[test]
+fn heuristic_by_mut_reference_keeps_state() {
+    /// The zero heuristic that counts its calls.
+    struct Counting(usize);
+
+    impl Heuristic<usize, [u32; 2]> for Counting {
+        fn estimate(&mut self, _state: &usize) -> Option<[u32; 2]> {
+            self.0 += 1;
+            Some([0, 0])
+        }
+    }
+
+    let p = problem(2, &[(0, 1, [1, 2])], 0, 1);
+    let mut h = Counting(0);
+    let out = solve(&p, &mut h);
+
+    assert_eq!(out.solutions.len(), 1);
+    assert_eq!(h.0, 2);
 }
 
 /// An unreachable goal yields no solutions, with and without heuristic.
@@ -57,7 +81,7 @@ fn start_is_goal() {
 fn unreachable_goal() {
     let p = problem(3, &[(0, 1, [1, 1]), (2, 0, [1, 1])], 0, 2);
 
-    assert_eq!(solve(&p, &ZeroHeuristic).solutions.len(), 0);
+    assert_eq!(solve(&p, ZeroHeuristic).solutions.len(), 0);
 
     let informed = solve_informed(&p);
     assert_eq!(informed.solutions.len(), 0);
@@ -82,7 +106,7 @@ fn hand_computed() {
     ];
     let p = problem(4, &edges, 0, 3);
 
-    for out in [solve(&p, &ZeroHeuristic), solve_informed(&p)] {
+    for out in [solve(&p, ZeroHeuristic), solve_informed(&p)] {
         let found: Vec<_> = out
             .solutions
             .iter()
@@ -103,7 +127,7 @@ proptest! {
     /// Uninformed BOA* finds exactly the Pareto-optimal cost set.
     #[test]
     fn zero_heuristic_matches_brute_force(p in problems::<2>()) {
-        check(&p, &solve(&p, &ZeroHeuristic))?;
+        check(&p, &solve(&p, ZeroHeuristic))?;
     }
 
     /// BOA* with an exact, consistent heuristic finds the same set.
@@ -116,7 +140,7 @@ proptest! {
     /// strictly decreasing in the second.
     #[test]
     fn output_is_a_staircase(p in problems::<2>()) {
-        let out = solve(&p, &ZeroHeuristic);
+        let out = solve(&p, ZeroHeuristic);
         for pair in out.solutions.windows(2) {
             prop_assert!(pair[0].cost[0] < pair[1].cost[0] && pair[0].cost[1] > pair[1].cost[1]);
         }
@@ -129,7 +153,7 @@ proptest! {
 /// objective.
 fn check_approx<H: Heuristic<usize, [u32; 2]>>(
     problem: &Problem<2>,
-    heuristic: &H,
+    heuristic: H,
     slack: u32,
 ) -> Result<(), TestCaseError> {
     let goal = |v: &usize| problem.goals[*v];
@@ -163,7 +187,7 @@ fn approx_drops_close_solution() {
     let edges = [(0, 1, [1, 3]), (0, 1, [2, 2]), (0, 1, [3, 1])];
     let p = problem(2, &edges, 0, 1);
     let costs = |slack| -> Vec<_> {
-        boa_star_approx(&p.graph, &ZeroHeuristic, 0, |v| *v == 1, slack)
+        boa_star_approx(&p.graph, ZeroHeuristic, 0, |v| *v == 1, slack)
             .solutions
             .into_iter()
             .map(|s| s.cost)
@@ -181,7 +205,7 @@ proptest! {
     #[test]
     fn approx_covers_front(p in problems::<2>(), slack in 0..=3_u32) {
         let h = exact_heuristic(&p);
-        check_approx(&p, &ZeroHeuristic, slack)?;
-        check_approx(&p, &|v: &usize| h[*v], slack)?;
+        check_approx(&p, ZeroHeuristic, slack)?;
+        check_approx(&p, heuristic_fn(|v: &usize| h[*v]), slack)?;
     }
 }

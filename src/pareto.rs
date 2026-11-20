@@ -4,7 +4,9 @@ mod truncated;
 
 use alloc::vec::Vec;
 
-use crate::cost::{Cost, weakly_dominates};
+use search_core::Cost;
+
+use crate::cost::weakly_dominates;
 
 pub(crate) use truncated::TruncatedFront;
 

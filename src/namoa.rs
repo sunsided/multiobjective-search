@@ -14,9 +14,10 @@
 //! order. The engine is shared with EMOA*, see
 //! [`crate::frontier_search`].
 
-use crate::cost::Cost;
+use search_core::{Cost, Heuristic};
+
 use crate::frontier_search;
-use crate::graph::{Graph, Heuristic};
+use crate::graph::Graph;
 use crate::output::Output;
 use crate::pareto::{Front, TruncatedFront};
 
@@ -60,13 +61,13 @@ use crate::pareto::{Front, TruncatedFront};
 ///     }
 /// }
 ///
-/// let out = namoa_star(&Routes, &ZeroHeuristic, 0, |s| *s == 3);
+/// let out = namoa_star(&Routes, ZeroHeuristic, 0, |s| *s == 3);
 /// let costs: Vec<_> = out.solutions.iter().map(|s| s.cost).collect();
 /// assert_eq!(costs, [[2, 6, 4], [5, 2, 4]]);
 /// ```
 pub fn namoa_star<G, H, C, P, const N: usize>(
     graph: &G,
-    heuristic: &H,
+    heuristic: H,
     start: G::State,
     is_goal: P,
 ) -> Output<G::State, [C; N]>
@@ -119,13 +120,13 @@ where
 ///     }
 /// }
 ///
-/// let out = namoa_star_dr(&Diamond, &ZeroHeuristic, 0, |s| *s == 3);
+/// let out = namoa_star_dr(&Diamond, ZeroHeuristic, 0, |s| *s == 3);
 /// assert_eq!(out.solutions.len(), 2);
 /// assert_eq!(out.solutions[1].path, [0, 2, 3]);
 /// ```
 pub fn namoa_star_dr<G, H, C, P, const N: usize>(
     graph: &G,
-    heuristic: &H,
+    heuristic: H,
     start: G::State,
     is_goal: P,
 ) -> Output<G::State, [C; N]>
