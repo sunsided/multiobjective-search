@@ -317,6 +317,11 @@ where
     /// Consumes the search and returns the solutions sorted by cost.
     fn into_output(self) -> Output<G::State, [C; N]> {
         let mut solutions: Vec<_> = self.solutions.iter().map(|&i| self.solution(i)).collect();
+        // The truncated solution check relies on this order (see the docs).
+        debug_assert!(
+            solutions.windows(2).all(|w| w[0].cost < w[1].cost),
+            "solutions not found in lexicographic order"
+        );
         solutions.sort_by_key(|s| s.cost);
 
         Output {

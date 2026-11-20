@@ -77,7 +77,12 @@ fn check_run(
     let costs: Vec<_> = result.solutions.iter().map(|s| s.cost).collect();
     check_report(&front, &costs, result.factor)?;
     if result.complete {
+        let exact = boa_star(&problem.graph, ZeroHeuristic, problem.start, |v: &usize| {
+            problem.goals[*v]
+        });
+        let boa: Vec<_> = exact.solutions.iter().map(|s| s.cost).collect();
         prop_assert!(result.factor.is_zero());
+        prop_assert_eq!(&costs, &boa);
         prop_assert_eq!(&costs, &front);
         if !front.is_empty() {
             prop_assert!(

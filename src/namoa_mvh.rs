@@ -52,8 +52,9 @@ pub use lazy::namoa_star_dr_mvh_lazy;
 /// Requirements, not checked at run time:
 ///
 /// - edge costs are non-negative;
-/// - `heuristic` is a consistent [`MvHeuristic`]. With an inconsistent
-///   one, a path whose estimates admit no consistent chain is never
+/// - `heuristic` is a consistent [`MvHeuristic`] (see there; the exact
+///   Pareto sets of the remaining cost are). With an inconsistent one, a
+///   path whose estimates admit no path-consistent chain is never
 ///   generated, so solutions can be lost and dominated ones returned.
 ///
 /// Solutions are the Pareto-optimal cost vectors, one path each, sorted

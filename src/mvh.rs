@@ -13,9 +13,18 @@ use search_core::Heuristic;
 /// - **Admissible:** for every path from `state` to a goal, some estimate
 ///   weakly dominates its cost. In particular every goal has the zero
 ///   vector among its estimates.
-/// - **Consistent:** every goal's estimates are `{0}`, and for every edge
-///   `(s, t)` with cost `c` and every estimate `h` of `s`, some estimate `h'`
-///   of `t` has `h <= c + h'` component-wise.
+/// - **Consistent** (monotone): every goal's estimates are `{0}`, and for
+///   every edge `(s, t)` with cost `c` and every estimate `h'` of `t`, some
+///   estimate `h` of `s` has `h <= c + h'` component-wise (Mandow and Pérez
+///   de la Cruz 2010, Definition 5.7). The exact Pareto sets of the
+///   remaining cost are consistent in this sense.
+///
+/// Wolff et al. state consistency with the quantifiers the other way round
+/// (every `h` of `s` has some `h'` of `t`), which their own Table 1 and the
+/// exact Pareto sets do not satisfy. What
+/// [`namoa_star_dr_mvh`](crate::namoa_star_dr_mvh) needs is that every path
+/// to a goal carries a chain of estimates `h_k <= c_k + h_(k+1)` ending in
+/// the goal's `0`; either form provides one.
 ///
 /// A single-valued [`Heuristic`] is the special case of one estimate per
 /// state; wrap it in [`SingleValued`]. Implemented for closures through

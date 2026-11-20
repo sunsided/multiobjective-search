@@ -31,7 +31,8 @@ impl Graph for Figure2 {
     }
 }
 
-/// The admissible and consistent MVH of Table 1 for [`Figure2`].
+/// The admissible MVH of Table 1 for [`Figure2`]; consistent in the
+/// monotone sense (see [`is_monotone`]).
 #[expect(
     clippy::trivially_copy_pass_by_ref,
     reason = "the shape mv_heuristic_fn expects"
@@ -44,6 +45,65 @@ fn table1(state: &u8, out: &mut Vec<[u32; 2]>) {
         3 => out.extend([[1, 6], [7, 1]]),
         _ => out.push([0, 0]),
     }
+}
+
+/// The edges of [`Figure2`].
+const FIGURE_2_EDGES: [(usize, usize, [u32; 2]); 7] = [
+    (0, 4, [3, 15]),
+    (0, 1, [7, 9]),
+    (0, 3, [10, 6]),
+    (1, 3, [1, 1]),
+    (3, 4, [2, 7]),
+    (3, 2, [7, 1]),
+    (2, 4, [1, 1]),
+];
+
+/// Returns `true` if `table` is consistent in the monotone sense of
+/// Mandow and Pérez de la Cruz (2010, Definition 5.7): for every edge
+/// `(s, t, c)` and every `h'` of `t`, some `h` of `s` has `h <= c + h'`.
+fn is_monotone<const N: usize>(
+    edges: &[(usize, usize, [u32; N])],
+    table: &[Vec<[u32; N]>],
+) -> bool {
+    edges.iter().all(|&(s, t, c)| {
+        table[t].iter().all(|ht| {
+            table[s]
+                .iter()
+                .any(|hs| (0..N).all(|i| hs[i] <= c[i] + ht[i]))
+        })
+    })
+}
+
+/// Returns `true` if `table` is consistent in the sense Wolff et al. state:
+/// for every edge `(s, t, c)` and every `h` of `s`, some `h'` of `t` has
+/// `h <= c + h'`.
+fn is_forward_consistent<const N: usize>(
+    edges: &[(usize, usize, [u32; N])],
+    table: &[Vec<[u32; N]>],
+) -> bool {
+    edges.iter().all(|&(s, t, c)| {
+        table[s].iter().all(|hs| {
+            table[t]
+                .iter()
+                .any(|ht| (0..N).all(|i| hs[i] <= c[i] + ht[i]))
+        })
+    })
+}
+
+/// Table 1 is monotone but not consistent in the order Wolff et al. write:
+/// on the edge from the start to the goal, `(17, 7)` exceeds `(3, 15) + 0`.
+#[test]
+fn table_1_is_monotone_only() {
+    let table: Vec<Vec<[u32; 2]>> = (0..5_u8)
+        .map(|s| {
+            let mut out = Vec::new();
+            table1(&s, &mut out);
+            out
+        })
+        .collect();
+
+    assert!(is_monotone(&FIGURE_2_EDGES, &table));
+    assert!(!is_forward_consistent(&FIGURE_2_EDGES, &table));
 }
 
 /// The solution costs of `out`.
@@ -71,7 +131,7 @@ fn figure_2_has_four_solutions() {
 }
 
 /// The exact MVH: per state, the Pareto-optimal costs to a goal. It is
-/// consistent; a dead end gets no estimate.
+/// consistent in the monotone sense; a dead end gets no estimate.
 fn exact_mvh<const N: usize>(problem: &Problem<N>) -> Vec<Vec<[u32; N]>> {
     (0..problem.graph.nodes)
         .map(|start| {
@@ -123,7 +183,9 @@ fn check_mvh<const N: usize>(
 
 /// All MVH checks for one problem: exact, weakened and single-valued.
 fn check_all<const N: usize>(problem: &Problem<N>, kind: &[u8]) -> Result<(), TestCaseError> {
-    check_mvh(problem, &exact_mvh(problem), true)?;
+    let exact = exact_mvh(problem);
+    prop_assert!(is_monotone(&problem.graph.edges, &exact));
+    check_mvh(problem, &exact, true)?;
     check_mvh(problem, &weakened_mvh(problem, kind), false)?;
 
     let h = exact_heuristic(problem);
