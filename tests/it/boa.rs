@@ -127,16 +127,13 @@ proptest! {
 /// solution is Pareto-optimal and a valid path, the output is a staircase,
 /// and every Pareto-optimal cost is covered within `slack` in the second
 /// objective.
-fn check_approx(problem: &Problem<2>, slack: u32) -> Result<(), TestCaseError> {
-    let h = exact_heuristic(problem);
-    let h = |v: &usize| h[*v];
-    let out = boa_star_approx(
-        &problem.graph,
-        &h,
-        problem.start,
-        |v| problem.goals[*v],
-        slack,
-    );
+fn check_approx<H: Heuristic<usize, [u32; 2]>>(
+    problem: &Problem<2>,
+    heuristic: &H,
+    slack: u32,
+) -> Result<(), TestCaseError> {
+    let goal = |v: &usize| problem.goals[*v];
+    let out = boa_star_approx(&problem.graph, heuristic, problem.start, goal, slack);
     let reference = pareto_costs(problem);
 
     check_paths(problem, &out)?;
@@ -179,9 +176,12 @@ fn approx_drops_close_solution() {
 }
 
 proptest! {
-    /// The approximation guarantee holds for small tolerances.
+    /// The approximation guarantee holds for small tolerances, with the
+    /// zero and the exact heuristic.
     #[test]
     fn approx_covers_front(p in problems::<2>(), slack in 0..=3_u32) {
-        check_approx(&p, slack)?;
+        let h = exact_heuristic(&p);
+        check_approx(&p, &ZeroHeuristic, slack)?;
+        check_approx(&p, &|v: &usize| h[*v], slack)?;
     }
 }

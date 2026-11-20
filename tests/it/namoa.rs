@@ -1,5 +1,5 @@
-//! NAMOA*, NAMOA*dr and EMOA* tests: property-based cross-checks against
-//! the brute-force reference for two, three and four objectives, and
+//! NAMOA*, NAMOA*dr and EMOA* tests: hand-computed cases, and
+//! property-based cross-checks against the brute-force reference for two, three and four objectives, and
 //! against BOA* for two.
 
 use multiobjective_search::{
@@ -8,7 +8,7 @@ use multiobjective_search::{
 use proptest::prelude::*;
 
 use crate::check::check;
-use crate::fixtures::{Problem, exact_heuristic, patchy_heuristic, problems};
+use crate::fixtures::{EdgeList, Problem, exact_heuristic, patchy_heuristic, problems};
 
 /// The three `N`-objective algorithms under test.
 #[derive(Debug, Clone, Copy)]
@@ -54,6 +54,83 @@ fn check_all<const N: usize>(problem: &Problem<N>, zeroed: &[bool]) -> Result<()
     check(problem, &solve(Algorithm::Emoa, problem, &exact))?;
 
     Ok(())
+}
+
+/// Builds a three-objective problem with a single goal.
+fn problem(
+    nodes: usize,
+    edges: &[(usize, usize, [u32; 3])],
+    start: usize,
+    goal: usize,
+) -> Problem<3> {
+    Problem {
+        graph: EdgeList {
+            nodes,
+            edges: edges.to_vec(),
+        },
+        start,
+        goals: (0..nodes).map(|v| v == goal).collect(),
+    }
+}
+
+/// Every algorithm on `problem` with the zero and the exact heuristic.
+fn outputs(problem: &Problem<3>) -> Vec<Output<usize, [u32; 3]>> {
+    let exact = exact_heuristic(problem);
+    let exact = |v: &usize| exact[*v];
+
+    [Algorithm::Namoa, Algorithm::NamoaDr, Algorithm::Emoa]
+        .into_iter()
+        .flat_map(|a| [solve(a, problem, &ZeroHeuristic), solve(a, problem, &exact)])
+        .collect()
+}
+
+/// A hand-computed three-objective graph from 0 to 3.
+///
+/// Routes: `0-1-3` and `0-1-2-3` both cost `[2, 3, 4]` (a zero-cost edge
+/// makes a tie), the direct edge `[3, 3, 3]`, `0-2-3` costs `[4, 3, 2]`,
+/// and a second direct edge `[5, 5, 5]` is dominated by all of them.
+#[test]
+fn hand_computed() {
+    let edges = [
+        (0, 1, [1, 2, 3]),
+        (1, 3, [1, 1, 1]),
+        (0, 2, [3, 2, 1]),
+        (2, 3, [1, 1, 1]),
+        (1, 2, [0, 0, 0]),
+        (0, 3, [3, 3, 3]),
+        (0, 3, [5, 5, 5]),
+    ];
+    let p = problem(4, &edges, 0, 3);
+
+    for out in outputs(&p) {
+        let costs: Vec<_> = out.solutions.iter().map(|s| s.cost).collect();
+        assert_eq!(costs, [[2, 3, 4], [3, 3, 3], [4, 3, 2]]);
+        assert_eq!(out.solutions[1].path, [0, 3]);
+        assert_eq!(out.solutions[2].path, [0, 2, 3]);
+        check(&p, &out).unwrap();
+    }
+}
+
+/// A start that is a goal yields exactly the empty path at zero cost.
+#[test]
+fn start_is_goal() {
+    let p = problem(2, &[(0, 1, [1, 1, 1]), (1, 0, [0, 0, 0])], 0, 0);
+
+    for out in outputs(&p) {
+        assert_eq!(out.solutions.len(), 1);
+        assert_eq!(out.solutions[0].cost, [0, 0, 0]);
+        assert_eq!(out.solutions[0].path, [0]);
+    }
+}
+
+/// An unreachable goal yields no solutions.
+#[test]
+fn unreachable_goal() {
+    let p = problem(3, &[(0, 1, [1, 1, 1]), (2, 0, [1, 1, 1])], 0, 2);
+
+    for out in outputs(&p) {
+        assert_eq!(out.solutions, []);
+    }
 }
 
 /// A problem paired with a random subset of nodes to zero the heuristic at.
