@@ -32,6 +32,7 @@
 //! | [`ReferencePoint`] | any `N` | admissible | Interactive: non-dominated solutions by Chebyshev distance to a movable reference point. |
 //! | [`fptas_constrained`] | 2 | none | FPTAS for the constrained shortest path: polynomially many labels, first cost within `1 + ε`. |
 //! | [`ranking`] | 2 | consistent | The classic ranking method: loopless paths by first cost. |
+//! | [`disjoint_pair`] | scalar | none | Suurballe: the cheapest edge- or state-disjoint pair; [`supported_disjoint_pairs`] for two objectives, [`dissimilar_paths`] for k dissimilar paths. Needs an [`EdgeGraph`]. |
 //! | [`brute_force`] | any `N` | none | Exhaustive reference for tests on small graphs. |
 //!
 //! Supporting types:
@@ -85,6 +86,7 @@ mod bottleneck;
 mod constrained;
 mod cost;
 mod dimacs;
+mod disjoint;
 mod emoa;
 mod encode;
 mod epsilon;
@@ -120,11 +122,15 @@ pub use bottleneck::{
 pub use constrained::constrained_shortest_path;
 pub use cost::{Dominates, add, weakly_dominates};
 pub use dimacs::{DimacsError, DimacsErrorKind, RoadGraph};
+pub use disjoint::{
+    CostedPair, Disjointness, PathPair, RankedPath, disjoint_pair, dissimilar_paths,
+    supported_disjoint_pairs,
+};
 pub use emoa::{emoa_star, emoa_star_tree};
 pub use encode::{KnapsackGraph, LabelCount};
 pub use epsilon::Epsilon;
 pub use fptas::fptas_constrained;
-pub use graph::{Graph, ReverseGraph, ZeroHeuristic};
+pub use graph::{EdgeGraph, Graph, ReverseGraph, ZeroHeuristic};
 pub use mvh::{MvHeuristic, MvHeuristicFn, MvhTable, SingleValued, apex_mvh, mv_heuristic_fn};
 pub use namoa::{namoa_star, namoa_star_dr};
 pub use namoa_mvh::{namoa_star_dr_mvh, namoa_star_dr_mvh_lazy};

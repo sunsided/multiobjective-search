@@ -41,6 +41,21 @@ pub trait ReverseGraph: Graph {
     fn predecessors(&self, state: &Self::State, out: &mut Vec<(Self::State, Self::Weight)>);
 }
 
+/// A [`Graph`] whose edges have identities, for problems that must tell
+/// parallel edges apart: disjoint and dissimilar paths.
+///
+/// An additive extension: graphs that only implement [`Graph`] keep working
+/// with every other search. `edges` must report the same edges as
+/// [`Graph::successors`], each with an identity unique in the graph.
+pub trait EdgeGraph: Graph {
+    /// An edge identity, unique over the whole graph.
+    type Edge: Clone + Ord;
+
+    /// Appends every outgoing edge of `state` to `out` as
+    /// `(edge, successor, weight)`. `out` is empty on entry.
+    fn edges(&self, state: &Self::State, out: &mut Vec<(Self::Edge, Self::State, Self::Weight)>);
+}
+
 /// The zero heuristic for cost vectors: no estimate, the search is
 /// uninformed.
 ///

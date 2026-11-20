@@ -10,6 +10,7 @@ mod boba;
 mod brute_force;
 mod check;
 mod dimacs;
+mod disjoint;
 mod fixtures;
 mod front;
 mod mvh;

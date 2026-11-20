@@ -395,11 +395,41 @@ problem classes; what the crate lacked when it was read:
 | Ratio objectives: cost/capacity (2.2.3(a)) | **implemented**: `min_cost_capacity_ratio` | the optimum is on the minsum–maxmin front; scanned with `WideMul` cross-multiplication; cross-checked |
 | Ratio objectives: cost/reliability (product), linear fractional `Σc1 / Σc2` (2.2.3(b), (c)) | not implemented | neither optimum lies on a min–min Pareto front of additive costs (the denominator is maximized, or multiplicative); they need parametric search over signed costs |
 | Quickest path, `sum delay + σ / min capacity` (2.2.3(d)) | **implemented**: `quickest_path` | a scan of the minsum–maxmin front (Pelegrín and Fernández) with exact 256-bit cross-multiplication, for costs up to `u64`; cross-checked |
-| Disjoint and maximally disjoint path pairs, k dissimilar paths (2.2.3) | not implemented | needs edge identities and residual-graph surgery (Suurballe), outside the successor-function model |
+| Disjoint path pairs (2.2.3(g); Suurballe, Bhandari) | **implemented** on the new `EdgeGraph` trait (an additive extension of `Graph` with edge identities): `disjoint_pair` for edge- or state-disjoint pairs (Suurballe with reduced costs, node splitting for states) | cross-checked against enumeration of path pairs for both kinds |
+| Bicriteria disjoint path pairs (Clímaco and Pascoal 2009) | **partly implemented**: `supported_disjoint_pairs`, the extreme supported pairs by dichotomic weighted Suurballe | the non-supported pairs need a ranking of pairs, which is not implemented; cross-checked against the hull vertices of the enumerated pair front |
+| Maximally disjoint (relaxed) pairs, cost against shared edges (Pascoal and Clímaco 2020) | not implemented | a bi-objective two-unit flow; no exact method fits the crate's searches |
+| k-shortest dissimilar paths (Moghanni et al. 2022) | **implemented** in its greedy form: `dissimilar_paths`, paths ranked by `(cost, edge sequence)` and kept when they share at most `max_shared` edges with every kept one | cross-checked against a greedy pass over all simple paths |
 | Label-count objectives and knapsack-type paths (2.2.2, 2.2.3; Pascoal et al. 2013, Captivo et al. 2003) | **implemented** as encodings: `LabelCount` (the label set rides in the state, so the count is additive) and `KnapsackGraph` (a layered graph over items with capacities in the state, lost value as cost) | every search of the crate solves them; cross-checked against path and subset enumeration |
 | Interactive and reference-point methods (INT class) | **implemented** as a library API: `ReferencePoint`, an iterator over the non-dominated solutions by weighted Chebyshev achievement `max_i w_i (c_i - r_i)` to a reference point, with `aim` to move the reference or the weights between "next solution" queries | best-first on the achievement of `f`, ties lexicographic so only non-dominated solutions come out; cross-checked against brute force, including a change of aim mid-session; the dialogue itself stays with the caller |
 | Approximation schemes (2.3; Hansen, Warburton, Tsaggouris and Zaroliagis) | **implemented** for the constrained shortest path: `fptas_constrained` | Bellman-Ford rounds with one label per geometric box of first costs (ratio `1 + ε / (2 (n - 1))`, integer thresholds) and the smallest second cost per box: polynomially many labels, which the ε-searches do not bound; cross-checked against the exact `constrained_shortest_path` for random budgets and tolerances, exact at `ε = 0` |
-| Uncertainty: stochastic, robust, fuzzy costs (2.4) | not implemented | different cost model |
+| Uncertainty: stochastic, robust, fuzzy costs (2.4) | design note only (below) | different cost model |
+
+### Design note: uncertain costs
+
+The survey's Section 2.4 covers stochastic, robust and fuzzy edge costs.
+None of them fits `Cost` as it stands, and none is implemented; this is
+how they could enter the crate.
+
+- **Scenario-robust costs** (min–max regret or min–max cost over a finite
+  scenario set) are the easiest: a cost vector with one component per
+  scenario is already an `N`-objective problem, and the robust optimum is
+  Pareto-optimal for it. A scan of a front (as for `quickest_path`)
+  picks the min–max solution; regret needs the per-scenario optima first.
+- **Stochastic costs with independent distributions** need an order on
+  distributions. First-order stochastic dominance is a partial order that
+  plays the role of Pareto dominance, but it is not preserved by addition
+  of independent variables in the way label setting needs, so pruning must
+  be by bounds (mean and variance as two objectives is the common
+  surrogate, and is additive under independence).
+- **Fuzzy costs** (triangular or trapezoidal numbers) add component-wise;
+  with an order on fuzzy numbers (the survey cites an order relation that
+  reduces to comparing a few parameters) they become multi-objective
+  vectors of those parameters, so the existing searches apply once the
+  order is fixed.
+
+A future `UncertainCost` trait would therefore sit beside `Cost`, with an
+adapter that maps each uncertain cost to the vector the chosen criterion
+compares; the searches would stay unchanged.
 
 ## Testing strategy
 

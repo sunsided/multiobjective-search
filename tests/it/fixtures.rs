@@ -1,6 +1,6 @@
 //! Test graphs, proptest strategies for them, and exact heuristics.
 
-use multiobjective_search::{Graph, ReverseGraph};
+use multiobjective_search::{EdgeGraph, Graph, ReverseGraph};
 use proptest::prelude::*;
 
 /// Largest number of nodes in a generated graph. Brute force is exponential.
@@ -32,6 +32,20 @@ impl<const N: usize> Graph for EdgeList<N> {
                 .iter()
                 .filter(|(from, _, _)| from == state)
                 .map(|&(_, to, cost)| (to, cost)),
+        );
+    }
+}
+
+impl<const N: usize> EdgeGraph for EdgeList<N> {
+    type Edge = usize;
+
+    fn edges(&self, state: &usize, out: &mut Vec<(usize, usize, [u32; N])>) {
+        out.extend(
+            self.edges
+                .iter()
+                .enumerate()
+                .filter(|(_, (from, _, _))| from == state)
+                .map(|(i, &(_, to, cost))| (i, to, cost)),
         );
     }
 }

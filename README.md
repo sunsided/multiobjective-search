@@ -46,8 +46,14 @@ reference on random graphs with two to four objectives:
       `parallel`), and its indexed frontier (`IndexedFront`, `FrontIndex`)
 - [x] From the Craveirinha et al. 2024 survey: minsum–maxmin paths
       (`minsum_maxmin`), constrained shortest paths (`constrained_shortest_path`)
-      and the classic ranking method (`ranking`); the rest of the survey's
-      classes are listed in `docs/design.md`
+      and the classic ranking method (`ranking`); several bottlenecks
+      (`minsum_maxmin_multi`), the cost/capacity ratio and quickest path,
+      the two-phase method (`two_phase`, `supported_solutions`), knapsack and
+      label-count encodings (`KnapsackGraph`, `LabelCount`), an interactive
+      reference-point search (`ReferencePoint`), an FPTAS for the constrained
+      path (`fptas_constrained`), and on graphs with edge identities
+      (`EdgeGraph`) disjoint pairs (`disjoint_pair`), supported bicriteria
+      pairs and dissimilar paths; the coverage table is in `docs/design.md`
 - [x] Brute-force reference over simple paths (`brute_force`)
 - [x] Pareto frontier for any number of objectives, `O(log n)` queries for two
       (`Front`, `BiFront`)
