@@ -15,6 +15,10 @@ reference on random graphs with two to four objectives:
       sorted `Vec` instead of a balanced tree
 - [x] NAMOA\*: classic multi-objective A* for admissible heuristics (`namoa_star`)
 - [x] NAMOA\*dr: NAMOA* with dimensionality reduction (`namoa_star_dr`)
+- [x] EMOA\* with the paper's balanced-tree frontiers (`emoa_star_tree`,
+      `TreeFront`): a treap with per-subtree bounding boxes, cross-checked
+      against the `Vec` frontier; slower than the `Vec` on the crate's
+      benchmarks, so `emoa_star` keeps the `Vec`
 - [x] Brute-force reference over simple paths (`brute_force`)
 - [x] Pareto frontier for any number of objectives, `O(log n)` queries for two
       (`Front`, `BiFront`)

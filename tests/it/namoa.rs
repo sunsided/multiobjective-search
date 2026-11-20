@@ -1,16 +1,17 @@
-//! NAMOA*, NAMOA*dr and EMOA* tests: hand-computed cases, and
+//! NAMOA*, NAMOA*dr, EMOA* and tree-frontier EMOA* tests: hand-computed cases, and
 //! property-based cross-checks against the brute-force reference for two, three and four objectives, and
 //! against BOA* for two.
 
 use multiobjective_search::{
-    Heuristic, Output, ZeroHeuristic, boa_star, emoa_star, heuristic_fn, namoa_star, namoa_star_dr,
+    Heuristic, Output, ZeroHeuristic, boa_star, emoa_star, emoa_star_tree, heuristic_fn,
+    namoa_star, namoa_star_dr,
 };
 use proptest::prelude::*;
 
 use crate::check::check;
 use crate::fixtures::{EdgeList, Problem, exact_heuristic, patchy_heuristic, problems};
 
-/// The three `N`-objective algorithms under test.
+/// The four `N`-objective algorithms under test.
 #[derive(Debug, Clone, Copy)]
 enum Algorithm {
     /// [`namoa_star`].
@@ -19,6 +20,8 @@ enum Algorithm {
     NamoaDr,
     /// [`emoa_star`].
     Emoa,
+    /// [`emoa_star_tree`].
+    EmoaTree,
 }
 
 /// Runs `algorithm` on `problem` with `heuristic`.
@@ -34,6 +37,7 @@ fn solve<H: Heuristic<usize, [u32; N]>, const N: usize>(
         Algorithm::Namoa => namoa_star(graph, heuristic, start, goal),
         Algorithm::NamoaDr => namoa_star_dr(graph, heuristic, start, goal),
         Algorithm::Emoa => emoa_star(graph, heuristic, start, goal),
+        Algorithm::EmoaTree => emoa_star_tree(graph, heuristic, start, goal),
     }
 }
 
@@ -52,6 +56,12 @@ fn check_all<const N: usize>(problem: &Problem<N>, zeroed: &[bool]) -> Result<()
     check(problem, &solve(Algorithm::NamoaDr, problem, exact))?;
     check(problem, &solve(Algorithm::Emoa, problem, ZeroHeuristic))?;
     check(problem, &solve(Algorithm::Emoa, problem, exact))?;
+    check(problem, &solve(Algorithm::EmoaTree, problem, ZeroHeuristic))?;
+    check(problem, &solve(Algorithm::EmoaTree, problem, exact))?;
+    prop_assert_eq!(
+        solve(Algorithm::EmoaTree, problem, exact),
+        solve(Algorithm::Emoa, problem, exact)
+    );
 
     Ok(())
 }
@@ -78,10 +88,15 @@ fn outputs(problem: &Problem<3>) -> Vec<Output<usize, [u32; 3]>> {
     let exact = exact_heuristic(problem);
     let exact = heuristic_fn(|v: &usize| exact[*v]);
 
-    [Algorithm::Namoa, Algorithm::NamoaDr, Algorithm::Emoa]
-        .into_iter()
-        .flat_map(|a| [solve(a, problem, ZeroHeuristic), solve(a, problem, exact)])
-        .collect()
+    [
+        Algorithm::Namoa,
+        Algorithm::NamoaDr,
+        Algorithm::Emoa,
+        Algorithm::EmoaTree,
+    ]
+    .into_iter()
+    .flat_map(|a| [solve(a, problem, ZeroHeuristic), solve(a, problem, exact)])
+    .collect()
 }
 
 /// A hand-computed three-objective graph from 0 to 3.
@@ -171,7 +186,7 @@ proptest! {
         };
         let expected = costs(boa_star(&p.graph, h, p.start, |v| p.goals[*v]));
 
-        for algorithm in [Algorithm::Namoa, Algorithm::NamoaDr, Algorithm::Emoa] {
+        for algorithm in [Algorithm::Namoa, Algorithm::NamoaDr, Algorithm::Emoa, Algorithm::EmoaTree] {
             prop_assert_eq!(costs(solve(algorithm, &p, h)), expected.clone());
         }
     }

@@ -134,8 +134,17 @@ rebuilt from parent links once a solution is found. The open list stores
   component zeroed. EMOA*'s balanced tree is replaced by the sorted `Vec`:
   same query cost for three objectives (the paper's TOA* case), `O(n)`
   insertion shift, and a prefix scan instead of a pruned tree traversal
-  for four or more (shortcut; revisit if profiles show either
-  dominating).
+  for four or more.
+- `TreeFront<C, N>` (public): the same frontier in a treap keyed
+  lexicographically, each node holding its subtree's component-wise min
+  and max. Queries skip subtrees whose min does not weakly dominate the
+  probe (and, as in the paper's `Check`, right subtrees of keys at or
+  above it); insertion removes dominated points in one pruned pass.
+  `emoa_star_tree` runs EMOA* on it (private `TruncatedTree`). Measured
+  slower than the `Vec` on four-objective grids and on near-antichain
+  fronts of 1000 and 16000 points, where nearly every bounding box admits
+  the probe, so `emoa_star` keeps the `Vec`. The paper's own complexity
+  table gives no better worst case than a linear scan either.
 
 NAMOA*, NAMOA*dr and EMOA* share one private engine
 (`frontier_search`) with two switches: the closed archive (full `Front`
@@ -240,7 +249,8 @@ loader yet.
 3. **BOBA\*:** `ReverseGraph`, bidirectional search with the two
    lexicographic directions, heuristics from single-objective backward
    searches.
-4. **EMOA\*:** truncated 3D frontier (sorted `Vec`, not a tree), `emoa_star`.
+4. **EMOA\*:** truncated 3D frontier (sorted `Vec`), `emoa_star`; the
+   balanced-tree variant `emoa_star_tree` on `TreeFront`.
 5. **Benchmarks and 0.1.0:** DIMACS loader in a dev tool or example,
    criterion benches, release.
 

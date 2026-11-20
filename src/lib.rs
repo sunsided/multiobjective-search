@@ -13,6 +13,7 @@
 //! | [`boa_star_approx`] | 2 | consistent | BOA* with an additive tolerance on the second objective. |
 //! | [`boba_star`] | 2 | computed internally | Bidirectional; needs a [`ReverseGraph`] and a single goal. |
 //! | [`emoa_star`] | any `N` | consistent | Lazy open list, truncated dominance; `O(log n)` checks for 3 objectives. |
+//! | [`emoa_star_tree`] | any `N` | consistent | EMOA* with the paper's balanced-tree frontiers. |
 //! | [`namoa_star_dr`] | any `N` | consistent | NAMOA* with dimensionality reduction. |
 //! | [`namoa_star`] | any `N` | admissible | Classic baseline; label-setting with [`ZeroHeuristic`]. |
 //! | [`brute_force`] | any `N` | none | Exhaustive reference for tests on small graphs. |
@@ -20,7 +21,7 @@
 //! Supporting types:
 //!
 //! - [`Front`] and [`BiFront`]: Pareto frontiers, `O(log n)` queries for two
-//!   objectives.
+//!   objectives; [`TreeFront`]: a balanced-tree frontier for four or more.
 //! - [`Graph`] and [`ReverseGraph`]: the search-space interface.
 //! - [`Heuristic`], [`heuristic_fn`] and [`ZeroHeuristic`]: per-objective
 //!   lower bounds. The trait comes from `search-core` and takes `&mut self`;
@@ -60,10 +61,10 @@ mod reference;
 pub use boa::{boa_star, boa_star_approx};
 pub use boba::boba_star;
 pub use cost::{Dominates, add, weakly_dominates};
-pub use emoa::emoa_star;
+pub use emoa::{emoa_star, emoa_star_tree};
 pub use graph::{Graph, ReverseGraph, ZeroHeuristic};
 pub use namoa::{namoa_star, namoa_star_dr};
 pub use output::{Output, Solution, Stats};
-pub use pareto::{BiFront, Front};
+pub use pareto::{BiFront, Front, TreeFront};
 pub use reference::brute_force;
 pub use search_core::{Cost, Heuristic, HeuristicFn, heuristic_fn};

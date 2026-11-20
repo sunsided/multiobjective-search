@@ -5,8 +5,8 @@ use std::hint::black_box;
 
 use criterion::Criterion;
 use multiobjective_search::{
-    Front, Graph, ReverseGraph, ZeroHeuristic, boa_star, boba_star, emoa_star, namoa_star,
-    namoa_star_dr,
+    Front, Graph, ReverseGraph, TreeFront, ZeroHeuristic, boa_star, boba_star, emoa_star,
+    emoa_star_tree, namoa_star, namoa_star_dr,
 };
 
 /// Runs every benchmark in this file with criterion's command-line flags.
@@ -15,7 +15,9 @@ fn main() {
 
     bench_two_objectives(&mut criterion);
     bench_three_objectives(&mut criterion);
+    bench_four_objectives(&mut criterion);
     bench_front(&mut criterion);
+    bench_front_four(&mut criterion);
     criterion.final_summary();
 }
 
@@ -127,6 +129,26 @@ fn bench_three_objectives(c: &mut Criterion) {
     group.finish();
 }
 
+/// NAMOA*dr and both EMOA* frontiers on a four-objective grid, uninformed:
+/// the truncated frontiers are three-dimensional.
+fn bench_four_objectives(c: &mut Criterion) {
+    let grid = Grid::<4> { side: 10 };
+    let goal = grid.goal();
+    let is_goal = |s: &u32| *s == goal;
+    let mut group = c.benchmark_group("grid_10x10_4obj");
+
+    group.bench_function("namoa_star_dr", |b| {
+        b.iter(|| namoa_star_dr(&grid, ZeroHeuristic, black_box(0), is_goal));
+    });
+    group.bench_function("emoa_star", |b| {
+        b.iter(|| emoa_star(&grid, ZeroHeuristic, black_box(0), is_goal));
+    });
+    group.bench_function("emoa_star_tree", |b| {
+        b.iter(|| emoa_star_tree(&grid, ZeroHeuristic, black_box(0), is_goal));
+    });
+    group.finish();
+}
+
 /// Inserting 1000 pseudo-random points into a frontier, two and three
 /// objectives.
 fn bench_front(c: &mut Criterion) {
@@ -155,4 +177,58 @@ fn bench_front(c: &mut Criterion) {
         });
     });
     group.finish();
+}
+
+/// Inserting mutually non-dominated four-objective points (near-constant
+/// coordinate sum), so the frontier grows to almost its full size: the
+/// sorted `Vec` frontier against the balanced tree, at a size where the
+/// `Vec` wins and one where the tree does.
+fn bench_front_four(c: &mut Criterion) {
+    for size in [1000, 16_000] {
+        let points = antichain(size);
+        let mut group = c.benchmark_group(format!("front_insert_{size}_4obj"));
+        group.sample_size(10);
+
+        group.bench_function("vec", |b| {
+            b.iter(|| {
+                let mut front = Front::new();
+                for p in &points {
+                    front.insert(black_box(*p));
+                }
+
+                front
+            });
+        });
+        group.bench_function("tree", |b| {
+            b.iter(|| {
+                let mut front = TreeFront::new();
+                for p in &points {
+                    front.insert(black_box(*p));
+                }
+
+                front
+            });
+        });
+        group.finish();
+    }
+}
+
+/// `size` pseudo-random four-objective points whose coordinates sum to
+/// 30000 plus a little noise, so few dominate each other.
+fn antichain(size: u64) -> Vec<[u32; 4]> {
+    (0..size)
+        .map(|i| {
+            let [a, b, c, noise] = [0, 1, 2, 3].map(|k| splitmix(i * 4 + k));
+            let (a, b, c) = (a % 10_000, b % 10_000, c % 10_000);
+            [a, b, c, 30_000 - a - b - c + noise % 50]
+        })
+        .collect()
+}
+
+/// One splitmix64 output for `x`, truncated to `u32`.
+fn splitmix(x: u64) -> u32 {
+    let mut z = x.wrapping_add(0x9e37_79b9_7f4a_7c15);
+    z = (z ^ (z >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
+    z = (z ^ (z >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
+    u32::try_from((z ^ (z >> 31)) >> 32).expect("upper 32 bits")
 }

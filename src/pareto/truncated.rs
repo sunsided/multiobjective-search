@@ -10,7 +10,7 @@
 
 use search_core::Cost;
 
-use crate::pareto::Front;
+use crate::pareto::{Front, TreeFront};
 
 /// Pareto frontier over objectives `1..N` of `N`-objective vectors.
 ///
@@ -52,6 +52,33 @@ impl<C: Cost, const N: usize> TruncatedFront<C, N> {
             Self::Two(front) => front.insert([point[1], point[2]]),
             Self::Zeroed(front) => front.insert(zero_first(point)),
         }
+    }
+}
+
+/// [`TruncatedFront`] in a balanced tree for every `N`: full vectors with
+/// the first component set to zero, in a [`TreeFront`].
+///
+/// Used by [`emoa_star_tree`](crate::emoa_star_tree). Same answers as
+/// [`TruncatedFront`]; only the cost profile differs.
+#[derive(Debug, Clone)]
+pub(crate) struct TruncatedTree<C, const N: usize>(TreeFront<C, N>);
+
+impl<C: Cost, const N: usize> TruncatedTree<C, N> {
+    /// Creates an empty frontier.
+    pub(crate) const fn new() -> Self {
+        Self(TreeFront::new())
+    }
+
+    /// Returns `true` if some stored vector is no worse than `point` in
+    /// every objective but the first.
+    pub(crate) fn weakly_dominates(&self, point: &[C; N]) -> bool {
+        self.0.weakly_dominates(&zero_first(*point))
+    }
+
+    /// Inserts `point` unless it is weakly dominated in objectives `1..N`.
+    /// Returns `true` if it was inserted.
+    pub(crate) fn insert(&mut self, point: [C; N]) -> bool {
+        self.0.insert(zero_first(point))
     }
 }
 

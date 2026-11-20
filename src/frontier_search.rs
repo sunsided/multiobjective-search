@@ -34,12 +34,12 @@ use search_core::{Cost, Heuristic};
 use crate::cost::{add, weakly_dominates};
 use crate::graph::Graph;
 use crate::output::{Output, Solution, Stats};
-use crate::pareto::{Front, TruncatedFront};
+use crate::pareto::{Front, TruncatedFront, TruncatedTree};
 
 /// A set of cost vectors that answers "is this vector weakly dominated?".
 ///
 /// Implemented with full dominance by [`Front`] and with dominance over
-/// objectives `1..N` by [`TruncatedFront`].
+/// objectives `1..N` by [`TruncatedFront`] and [`TruncatedTree`].
 pub(crate) trait Archive<C, const N: usize> {
     /// Creates an empty archive.
     fn empty() -> Self;
@@ -73,6 +73,20 @@ impl<C: Cost, const N: usize> Archive<C, N> for TruncatedFront<C, N> {
 
     fn weakly_dominates(&self, point: &[C; N]) -> bool {
         TruncatedFront::weakly_dominates(self, point)
+    }
+
+    fn add(&mut self, point: [C; N]) {
+        self.insert(point);
+    }
+}
+
+impl<C: Cost, const N: usize> Archive<C, N> for TruncatedTree<C, N> {
+    fn empty() -> Self {
+        Self::new()
+    }
+
+    fn weakly_dominates(&self, point: &[C; N]) -> bool {
+        TruncatedTree::weakly_dominates(self, point)
     }
 
     fn add(&mut self, point: [C; N]) {
