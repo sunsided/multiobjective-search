@@ -12,7 +12,7 @@ use alloc::collections::{BTreeMap, BTreeSet, BinaryHeap};
 use alloc::vec::Vec;
 use core::cmp::{Ordering, Reverse};
 
-use search_core::{Cost, WideMul};
+use search_core::{Cost, ExactArith, ExactNumber, WideMul};
 
 use crate::graph::{EdgeGraph, Graph};
 
@@ -105,11 +105,26 @@ where
     C: Cost + WideMul,
     F: Fn(&G::Weight) -> C,
 {
+    suurballe(graph, start, target, |w| Plain(cost(w)), kind).map(|(pair, total)| (pair, total.0))
+}
+
+/// [`disjoint_pair`] over any [`Scalar`] cost.
+fn suurballe<G, T, F>(
+    graph: &G,
+    start: G::State,
+    target: G::State,
+    cost: F,
+    kind: Disjointness,
+) -> Option<CostedPair<G::State, G::Edge, T>>
+where
+    G: EdgeGraph,
+    T: Scalar,
+    F: Fn(&G::Weight) -> T,
+{
     match kind {
         Disjointness::Edges => {
             let net = Network::explore(graph, start, |w| cost(w));
-            let (pair, total) = net.suurballe(&target)?;
-            Some((pair, total))
+            net.suurballe(&target)
         }
         Disjointness::States => {
             let split = Split {
@@ -117,11 +132,62 @@ where
                 start: start.clone(),
                 target: target.clone(),
             };
-            let cost = |w: &Option<G::Weight>| w.as_ref().map_or(C::ZERO, &cost);
+            let cost = |w: &Option<G::Weight>| w.as_ref().map_or_else(T::zero, &cost);
             let net = Network::explore(&split, (start, true), cost);
             let (pair, total) = net.suurballe(&(target, false))?;
             Some((unsplit(&pair), total))
         }
+    }
+}
+
+/// The scalar costs Suurballe's algorithm sums and compares: a zero, a sum
+/// and the distance `|a - b|` for the reduced costs.
+trait Scalar: Clone + Ord {
+    /// Zero.
+    fn zero() -> Self;
+
+    /// `self + other`.
+    #[must_use]
+    fn plus(&self, other: &Self) -> Self;
+
+    /// `|self - other|`.
+    #[must_use]
+    fn distance(&self, other: &Self) -> Self;
+}
+
+/// A [`Cost`] as a [`Scalar`].
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+struct Plain<C>(C);
+
+impl<C: Cost + WideMul> Scalar for Plain<C> {
+    fn zero() -> Self {
+        Self(C::ZERO)
+    }
+
+    fn plus(&self, other: &Self) -> Self {
+        Self(self.0 + other.0)
+    }
+
+    fn distance(&self, other: &Self) -> Self {
+        Self(self.0.abs_diff(other.0))
+    }
+}
+
+/// An [`ExactNumber`] as a [`Scalar`].
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
+struct Exact<T>(T);
+
+impl<T: ExactNumber> Scalar for Exact<T> {
+    fn zero() -> Self {
+        Self(T::zero())
+    }
+
+    fn plus(&self, other: &Self) -> Self {
+        Self(self.0.clone() + other.0.clone())
+    }
+
+    fn distance(&self, other: &Self) -> Self {
+        Self(self.0.abs_diff(&other.0))
     }
 }
 
@@ -147,7 +213,7 @@ enum Step {
     Backward(usize),
 }
 
-impl<S: Clone + Ord, E: Clone, C: Cost + WideMul> Network<S, E, C> {
+impl<S: Clone + Ord, E: Clone, C: Scalar> Network<S, E, C> {
     /// Explores everything reachable from `start`.
     fn explore<G: EdgeGraph<State = S, Edge = E>>(
         graph: &G,
@@ -200,7 +266,7 @@ impl<S: Clone + Ord, E: Clone, C: Cost + WideMul> Network<S, E, C> {
         let n = self.states.len();
         let (mut dist, mut parent) = (alloc::vec![None; n], alloc::vec![None; n]);
         let mut done = alloc::vec![false; n];
-        let mut heap = BinaryHeap::from([Reverse((C::ZERO, 0_usize, None::<Step>))]);
+        let mut heap = BinaryHeap::from([Reverse((C::zero(), 0_usize, None::<Step>))]);
 
         while let Some(Reverse((d, u, via))) = heap.pop() {
             if done[u] {
@@ -208,11 +274,11 @@ impl<S: Clone + Ord, E: Clone, C: Cost + WideMul> Network<S, E, C> {
             }
 
             done[u] = true;
-            dist[u] = Some(d);
+            dist[u] = Some(d.clone());
             parent[u] = via;
             for (step, v, c) in steps(u) {
                 if !done[v] {
-                    heap.push(Reverse((d + c, v, Some(step))));
+                    heap.push(Reverse((d.plus(&c), v, Some(step))));
                 }
             }
         }
@@ -247,11 +313,11 @@ impl<S: Clone + Ord, E: Clone, C: Cost + WideMul> Network<S, E, C> {
         let original = |u: usize| {
             self.out[u]
                 .iter()
-                .map(|&a| (Step::Forward(a), self.arcs[a].2, self.arcs[a].3))
+                .map(|&a| (Step::Forward(a), self.arcs[a].2, self.arcs[a].3.clone()))
                 .collect()
         };
         let (dist, parent) = self.dijkstra(original);
-        dist[t]?;
+        dist[t].as_ref()?;
         if t == 0 {
             return None;
         }
@@ -276,21 +342,25 @@ impl<S: Clone + Ord, E: Clone, C: Cost + WideMul> Network<S, E, C> {
                 .iter()
                 .filter(|a| !on_first.contains(a))
                 .map(|&a| {
-                    let (_, from, to, c) = self.arcs[a];
-                    let reduced =
-                        (dist[from].expect("reachable") + c).abs_diff(dist[to].expect("reachable"));
+                    let (_, from, to, c) = &self.arcs[a];
+                    let (from, to) = (*from, *to);
+                    let reduced = dist[from]
+                        .as_ref()
+                        .expect("reachable")
+                        .plus(c)
+                        .distance(dist[to].as_ref().expect("reachable"));
                     (Step::Forward(a), to, reduced)
                 })
                 .collect();
             steps.extend(
                 reversed[u]
                     .iter()
-                    .map(|&a| (Step::Backward(a), self.arcs[a].1, C::ZERO)),
+                    .map(|&a| (Step::Backward(a), self.arcs[a].1, C::zero())),
             );
             steps
         };
         let (dist2, parent2) = self.dijkstra(residual);
-        dist2[t]?;
+        dist2[t].as_ref()?;
 
         let mut used = on_first.clone();
         for step in self.trace(&parent2, t) {
@@ -310,7 +380,7 @@ impl<S: Clone + Ord, E: Clone, C: Cost + WideMul> Network<S, E, C> {
         let total = one
             .iter()
             .chain(&two)
-            .fold(C::ZERO, |sum, &a| sum + self.arcs[a].3);
+            .fold(C::zero(), |sum, &a| sum.plus(&self.arcs[a].3));
         let states = |arcs: &[usize]| {
             core::iter::once(self.states[0].clone())
                 .chain(arcs.iter().map(|&a| self.states[self.arcs[a].2].clone()))
@@ -460,8 +530,8 @@ fn unsplit<S: Clone + PartialEq + Ord, E: Clone>(
 /// asks for the pairs whose summed costs `(c1, c2)` are non-dominated.
 /// This finds its extreme supported points by dichotomic search, each step
 /// one [`disjoint_pair`] run on the weighted sum `w1 · c1 + w2 · c2`
-/// (lexicographic ends by large weights), in `u128` arithmetic: exact while
-/// the costs summed over all edges stay below `2^63`. The non-supported
+/// (lexicographic ends by large weights), summed exactly through
+/// [`ExactArith`]. The non-supported
 /// pairs between them are not searched; finding them needs a ranking of
 /// pairs, which this crate does not implement.
 ///
@@ -516,23 +586,29 @@ pub fn supported_disjoint_pairs<G, C>(
 ) -> Vec<CostedPair<G::State, G::Edge, [C; 2]>>
 where
     G: EdgeGraph<Weight = [C; 2]>,
-    C: Cost + Into<u64>,
+    C: Cost + ExactArith,
 {
-    let solve = |w: [u128; 2]| {
-        let cost =
-            move |c: &[C; 2]| w[0] * u128::from(c[0].into()) + w[1] * u128::from(c[1].into());
-        disjoint_pair(graph, start.clone(), target.clone(), cost, kind).map(|(pair, _)| {
+    let exact = |c: [C; 2]| [c[0].exact(), c[1].exact()];
+    let value = |w: &[C::Exact; 2], c: [C; 2]| {
+        let [c0, c1] = exact(c);
+        w[0].clone() * c0 + w[1].clone() * c1
+    };
+    let solve = |w: [C::Exact; 2]| {
+        let cost = |c: &[C; 2]| Exact(value(&w, *c));
+        suurballe(graph, start.clone(), target.clone(), cost, kind).map(|(pair, _)| {
             let total = pair_cost(graph, &pair);
             (pair, total)
         })
     };
 
-    // Large enough that one unit of the main objective outweighs the other.
-    let big = u128::from(u64::MAX) + 1;
-    let Some(left) = solve([big, 1]) else {
+    // One more than any pair's total in the other objective, so that the
+    // weighted sums order lexicographically.
+    let [sum0, sum1] = reachable_sums(graph, start);
+    let one = C::Exact::one;
+    let Some(left) = solve([sum1.clone() + sum1 + one(), one()]) else {
         return Vec::new();
     };
-    let right = solve([1, big]).expect("a pair exists");
+    let right = solve([one(), sum0.clone() + sum0 + one()]).expect("a pair exists");
     if left.1 == right.1 {
         return alloc::vec![left];
     }
@@ -541,13 +617,10 @@ where
     let mut pending = alloc::vec![right];
     while let Some(b) = pending.pop() {
         let a = found.last().expect("starts with the left end").1;
-        let w = [
-            u128::from(a[1].into() - b.1[1].into()),
-            u128::from(b.1[0].into() - a[0].into()),
-        ];
-        let p = solve(w).expect("a pair exists");
-        let value = |c: [C; 2]| w[0] * u128::from(c[0].into()) + w[1] * u128::from(c[1].into());
-        if value(p.1) < value(a) {
+        let (ea, eb) = (exact(a), exact(b.1));
+        let w = [ea[1].abs_diff(&eb[1]), eb[0].abs_diff(&ea[0])];
+        let p = solve(w.clone()).expect("a pair exists");
+        if value(&w, p.1) < value(&w, a) {
             pending.push(b);
             pending.push(p);
         } else {
@@ -556,6 +629,33 @@ where
     }
 
     found
+}
+
+/// The sums over all reachable edges of each objective, exactly.
+fn reachable_sums<G, C>(graph: &G, start: &G::State) -> [C::Exact; 2]
+where
+    G: EdgeGraph<Weight = [C; 2]>,
+    C: Cost + ExactArith,
+{
+    let mut seen = BTreeSet::from([start.clone()]);
+    let mut stack = alloc::vec![start.clone()];
+    let mut sums = [C::Exact::zero(), C::Exact::zero()];
+    let mut edges = Vec::new();
+
+    while let Some(state) = stack.pop() {
+        graph.edges(&state, &mut edges);
+        for (_, to, w) in edges.drain(..) {
+            sums = [
+                sums[0].clone() + w[0].exact(),
+                sums[1].clone() + w[1].exact(),
+            ];
+            if seen.insert(to.clone()) {
+                stack.push(to);
+            }
+        }
+    }
+
+    sums
 }
 
 /// The summed weights of both paths of `pair`.
