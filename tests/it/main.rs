@@ -15,6 +15,7 @@ mod dimacs;
 mod disjoint;
 mod fixtures;
 mod front;
+mod heuristics;
 mod mvh;
 mod namoa;
 #[cfg(feature = "parallel")]

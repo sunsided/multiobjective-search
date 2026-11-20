@@ -35,6 +35,7 @@
 //! | [`ranking`] | 2 | consistent | The classic ranking method: loopless paths by first cost. |
 //! | [`disjoint_pair`] | scalar | none | Suurballe: the cheapest edge- or state-disjoint pair; [`supported_disjoint_pairs`] for two objectives, [`disjoint_pair_front`] for the full bi-objective front, [`maximally_disjoint_pairs`] for cost against shared edges, [`dissimilar_paths`] for k dissimilar paths. Needs an [`EdgeGraph`]. |
 //! | [`aggregated_search`] | `M` hidden, `K` solution | admissible in the hidden space | Objective-aggregation functions over hidden objectives, exact or ε-approximate. |
+//! | [`label_correcting`] | any `N` | none | Multi-objective label correcting (Guerriero and Musmanno). |
 //! | [`brute_force`] | any `N` | none | Exhaustive reference for tests on small graphs. |
 //!
 //! Supporting types:
@@ -47,6 +48,9 @@
 //!   algorithms take the heuristic by value, so pass `&mut h` to keep it.
 //! - [`MvHeuristic`], [`mv_heuristic_fn`] and [`SingleValued`]: multi-valued
 //!   heuristics, a set of lower bounds per state.
+//! - [`IdealPoint`] and [`DifferentialHeuristic`]: heuristic builders, the
+//!   ideal point from per-objective backward Dijkstras and landmark-based
+//!   differential heuristics.
 //! - [`Cost`] (from `search-core`) and [`Dominates`]: scalar costs and
 //!   Pareto dominance.
 //! - [`Output`]: solutions sorted lexicographically by cost, plus counters.
@@ -102,6 +106,8 @@ mod fptas;
 mod fractional;
 mod frontier_search;
 mod graph;
+mod heuristics;
+mod label_correcting;
 mod mvh;
 mod namoa;
 mod namoa_mvh;
@@ -147,6 +153,8 @@ pub use epsilon::Epsilon;
 pub use fptas::fptas_constrained;
 pub use fractional::{ExactReliability, Reliability, min_cost_reliability_ratio, min_ratio_path};
 pub use graph::{EdgeGraph, Graph, ReverseGraph, ZeroHeuristic};
+pub use heuristics::{DifferentialHeuristic, IdealPoint, Towards};
+pub use label_correcting::label_correcting;
 pub use mvh::{MvHeuristic, MvHeuristicFn, MvhTable, SingleValued, apex_mvh, mv_heuristic_fn};
 pub use namoa::{namoa_star, namoa_star_dr};
 pub use namoa_mvh::{namoa_star_dr_mvh, namoa_star_dr_mvh_lazy};

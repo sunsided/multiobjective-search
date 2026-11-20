@@ -437,6 +437,35 @@ NAMOA*dr 1.04 ms, parallel MOA* 1.70 ms, SIP-MOSP 2.9 to 4.2 ms; 24x24
 grid, two objectives — parallel BOBA* 2.7 ms, parallel MOA* 3.9 ms,
 SIP-MOSP 8.5 to 11 ms.
 
+### Coverage of the Salzman et al. survey
+
+O. Salzman, C. Hernández Ulloa, A. Felner, S. Koenig. "Multi-Objective
+Search: Algorithms, Applications, and Emerging Directions." arXiv
+2510.25504. Used as a map:
+
+| Topic (survey section) | Here | Status |
+|---|---|---|
+| Label-correcting MOS (3.1; Guerriero and Musmanno 2001) | `label_correcting` | **added**; cross-checked against brute force |
+| MOA*, NAMOA*, lexicographic order and dimensionality reduction (3.1) | `namoa_star`, `namoa_star_dr`, `emoa_star` | covered |
+| BOA*, EMOA*, LTMOA*-style frontiers (3.2) | `boa_star`, `emoa_star`, `emoa_star_tree`, `TruncatedFront`, `IndexedFront` | covered |
+| Negative edge costs (3.2; Ahmadi et al. 2024) | not implemented | `Cost` is unsigned by design (search-core) |
+| FPTAS (3.1; Warburton, Tsaggouris and Zaroliagis) | `fptas_constrained` | covered for the constrained path |
+| PP-A*, A*pex (3.2) | `pp_a_star`, `apex_star` | covered |
+| Anytime MOS: A-A*pex (3.2) | `boa_star_anytime` (two objectives), `pp_a_star_iterative` | A-A*pex itself is not implemented: its reuse across tolerances for `N` objectives would need an `N`-objective `AnytimeFront` |
+| Correlation-aware approximation (3.2; Halle et al. 2025) | not implemented | a preprocessing framework over correlated objectives, outside the searches |
+| Parallel MOS: objective-order portfolios with shared bounds, SIMD set dominance (3.2) | `parallel_moa_star`, `sip_mosp`, `boba_star_parallel` | covered except SIMD (the crate forbids `unsafe` and stays portable) |
+| Dynamic MOS, MO path-based D* Lite (3.2) | not implemented | needs an edge-change interface the `Graph` trait does not have |
+| Theory: must-, maybe-, never-expand vertices (3.2; Skyler et al. 2024) | not implemented | analysis, not an algorithm |
+| Ideal-point heuristic (3.2) | `IdealPoint` | **added**: per-objective backward Dijkstra; equal to the exact per-objective distances in tests |
+| Multi-valued heuristics (3.2) | `MvHeuristic`, `apex_mvh`, `namoa_star_dr_mvh_lazy` | covered |
+| Differential heuristics, bi-objective DHs (3.2; Goldberg and Harrelson, Zhang et al. 2023) | `DifferentialHeuristic` | **added** in the per-objective single-valued form; tested admissible, consistent toward reachable goals, and exact fronts with NAMOA*; the multi-valued BO-DH variant is not implemented |
+| MOSSP, MOMDP, MORL (2.3, 3.3) | not implemented | stochastic models, outside deterministic graph search |
+| MOS with objective aggregation (4) | `aggregated_search` | covered |
+| Multi-objective MST (4) | not implemented | a different combinatorial problem |
+| MO-MAPF (4) | not here | belongs to the `mapf-search` crate |
+| Benchmarks (5) | `benchmarks.rs` | covered by the Peer et al. generators |
+| Preference elicitation, interactive search (6) | `ReferencePoint` | covered as a library API |
+
 ### Gaps against the Craveirinha et al. 2024 survey
 
 J. Craveirinha, J. Clímaco, R. Girão-Silva, M. Pascoal. "Multiobjective

@@ -60,6 +60,9 @@ reference on random graphs with two to four objectives:
       monotone aggregations of hidden objectives (Peer et al.)
 - [x] Benchmark-suite generators after Peer et al. 2026 (`random_grid`, `netmaker`,
       `guards_grid`, `road_extended`, `BenchmarkGraph`) and a `suite` bench group
+- [x] From the Salzman et al. survey: multi-objective label correcting
+      (`label_correcting`), the ideal-point heuristic (`IdealPoint`) and
+      differential heuristics (`DifferentialHeuristic`)
 - [x] Brute-force reference over simple paths (`brute_force`)
 - [x] Pareto frontier for any number of objectives, `O(log n)` queries for two
       (`Front`, `BiFront`)
