@@ -494,6 +494,7 @@ fn bench_sip(c: &mut Criterion) {
                 search_workers: 4,
                 update_workers: 4,
                 index: FrontIndex::Blocks,
+                ..SipConfig::DEFAULT
             },
         ),
         (
@@ -502,6 +503,7 @@ fn bench_sip(c: &mut Criterion) {
                 search_workers: 4,
                 update_workers: 4,
                 index: FrontIndex::Tree,
+                ..SipConfig::DEFAULT
             },
         ),
     ];

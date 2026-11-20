@@ -20,8 +20,8 @@ pub enum FrontIndex {
     Tree,
 }
 
-/// Vectors per block of [`FrontIndex::Blocks`].
-const BLOCK: usize = 16;
+/// Default vectors per block of [`FrontIndex::Blocks`].
+pub const DEFAULT_BLOCK: usize = 16;
 
 /// An immutable set of `N`-objective cost vectors, sorted
 /// lexicographically, with a range-minimum index (Xu et al., "Asynchronous
@@ -61,6 +61,8 @@ pub struct IndexedFront<C, const N: usize> {
     points: Vec<[C; N]>,
     /// The summary chosen at construction.
     index: Summary<C, N>,
+    /// Vectors per block of [`FrontIndex::Blocks`]; at least 1.
+    block: usize,
 }
 
 /// The range minima of an [`IndexedFront`].
@@ -82,17 +84,34 @@ enum Summary<C, const N: usize> {
 }
 
 impl<C: Cost, const N: usize> IndexedFront<C, N> {
-    /// Sorts `points` and builds the chosen index over them.
+    /// Sorts `points` and builds the chosen index over them, with blocks of
+    /// 16 vectors for [`FrontIndex::Blocks`].
     #[must_use]
-    pub fn new(mut points: Vec<[C; N]>, index: FrontIndex) -> Self {
+    pub fn new(points: Vec<[C; N]>, index: FrontIndex) -> Self {
+        Self::with_block_size(points, index, DEFAULT_BLOCK)
+    }
+
+    /// [`IndexedFront::new`] with `block` vectors per block of
+    /// [`FrontIndex::Blocks`] (ignored by the other indexes).
+    ///
+    /// # Panics
+    ///
+    /// Panics if `block` is zero.
+    #[must_use]
+    pub fn with_block_size(mut points: Vec<[C; N]>, index: FrontIndex, block: usize) -> Self {
+        assert!(block > 0, "the block size must be positive");
         points.sort_unstable();
         let index = match index {
             FrontIndex::None => Summary::None,
-            FrontIndex::Blocks => Summary::Blocks(points.chunks(BLOCK).map(minimum).collect()),
+            FrontIndex::Blocks => Summary::Blocks(points.chunks(block).map(minimum).collect()),
             FrontIndex::Tree => tree(&points),
         };
 
-        Self { points, index }
+        Self {
+            points,
+            index,
+            block,
+        }
     }
 
     /// The vectors, sorted lexicographically ascending.
@@ -123,7 +142,7 @@ impl<C: Cost, const N: usize> IndexedFront<C, N> {
         match &self.index {
             Summary::None => candidates.iter().any(|p| below(p, q)),
             Summary::Blocks(mins) => candidates
-                .chunks(BLOCK)
+                .chunks(self.block)
                 .zip(mins)
                 .any(|(block, min)| below_tail(min, q) && block.iter().any(|p| below(p, q))),
             Summary::Tree { leaves, mins } => self.tree_dominates(*leaves, mins, prefix, q),

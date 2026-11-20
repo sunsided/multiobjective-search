@@ -48,7 +48,10 @@ use crate::graph::Graph;
 use crate::output::{Output, Solution, Stats};
 use crate::pareto::{Front, FrontIndex, IndexedFront};
 
-/// Worker counts and the snapshot index of [`sip_mosp`].
+/// Worker counts, the snapshot index and its thresholds for [`sip_mosp`].
+///
+/// The thresholds only decide when a snapshot is consolidated and how its
+/// base is summarized; they never change the answer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SipConfig {
     /// Search workers, at least 1.
@@ -59,27 +62,43 @@ pub struct SipConfig {
     /// The index over snapshot bases: [`FrontIndex::Blocks`] is SIP-MOSP-BM,
     /// [`FrontIndex::Tree`] SIP-MOSP-ST.
     pub index: FrontIndex,
+    /// Frontiers smaller than this are published as an unindexed base only
+    /// (the paper's `θ_I`). Default 64.
+    pub index_threshold: usize,
+    /// The delta is folded into a rebuilt base once it holds
+    /// `max(delta_min, |F| / delta_divisor)` vectors (the paper's adaptive
+    /// `θ_Δ(|F|)`). Default 8.
+    pub delta_min: usize,
+    /// See [`SipConfig::delta_min`]; at least 1. Default 8.
+    pub delta_divisor: usize,
+    /// Vectors per block of [`FrontIndex::Blocks`]; at least 1. Default 16.
+    pub block_size: usize,
 }
 
-impl Default for SipConfig {
-    /// Two search and two update workers with the block-minimum index.
-    fn default() -> Self {
-        Self {
-            search_workers: 2,
-            update_workers: 2,
-            index: FrontIndex::Blocks,
-        }
+impl SipConfig {
+    /// Two search and two update workers, the block-minimum index, and the
+    /// default thresholds.
+    pub const DEFAULT: Self = Self {
+        search_workers: 2,
+        update_workers: 2,
+        index: FrontIndex::Blocks,
+        index_threshold: 64,
+        delta_min: 8,
+        delta_divisor: 8,
+        block_size: 16,
+    };
+
+    /// The delta capacity for a frontier of `frontier` vectors.
+    fn delta_capacity(&self, frontier: usize) -> usize {
+        (frontier / self.delta_divisor).max(self.delta_min)
     }
 }
 
-/// Frontiers smaller than this are published as an unindexed base only
-/// (the paper's `θ_I`).
-const INDEX_THRESHOLD: usize = 64;
-
-/// The delta capacity before the base is rebuilt (the paper's adaptive
-/// `θ_Δ(|F|)`): an eighth of the frontier, at least 8.
-fn delta_capacity(frontier: usize) -> usize {
-    (frontier / 8).max(8)
+impl Default for SipConfig {
+    /// [`SipConfig::DEFAULT`].
+    fn default() -> Self {
+        Self::DEFAULT
+    }
 }
 
 /// SIP-MOSP: finds one path for every Pareto-optimal cost vector from
@@ -99,7 +118,8 @@ fn delta_capacity(frontier: usize) -> usize {
 ///
 /// # Panics
 ///
-/// Panics if a worker count is zero, or if a worker thread panics.
+/// Panics if a worker count, `delta_divisor` or `block_size` is zero, or if a
+/// worker thread panics.
 ///
 /// # Examples
 ///
@@ -146,6 +166,10 @@ where
     assert!(
         config.search_workers > 0 && config.update_workers > 0,
         "SIP-MOSP needs at least one search and one update worker"
+    );
+    assert!(
+        config.delta_divisor > 0 && config.block_size > 0,
+        "the delta divisor and the block size must be positive"
     );
 
     let Some(h) = heuristic.estimate(&start) else {
@@ -281,22 +305,26 @@ impl<C: Cost, const N: usize> Snapshot<C, N> {
     /// rebuilt indexed base when the delta is full or the frontier just
     /// outgrew the threshold, and otherwise the shared base with `g`
     /// appended to the delta.
-    fn next(&self, front: &Front<C, N>, g: [C; N], index: FrontIndex) -> Self {
+    fn next(&self, front: &Front<C, N>, g: [C; N], config: &SipConfig) -> Self {
         let version = self.version + 1;
         let rebuild = |index| Self {
-            base: Arc::new(IndexedFront::new(front.as_slice().to_vec(), index)),
+            base: Arc::new(IndexedFront::with_block_size(
+                front.as_slice().to_vec(),
+                index,
+                config.block_size,
+            )),
             delta: Vec::new(),
             delta_min: None,
             version,
         };
 
-        if front.len() < INDEX_THRESHOLD {
+        if front.len() < config.index_threshold {
             return rebuild(FrontIndex::None);
         }
 
-        let unindexed = self.base.len() < INDEX_THRESHOLD;
-        if unindexed || self.delta.len() + 1 >= delta_capacity(front.len()) {
-            return rebuild(index);
+        let unindexed = self.base.len() < config.index_threshold;
+        if unindexed || self.delta.len() + 1 >= config.delta_capacity(front.len()) {
+            return rebuild(config.index);
         }
 
         let mut delta = self.delta.clone();
@@ -618,7 +646,7 @@ impl<C: Cost, const N: usize> Canonical<C, N> {
     /// The admission step of Algorithm 3 (lines 8 to 24): rejects `g` if it
     /// was checked against an older snapshot and the current one dominates
     /// it, else inserts it and returns the next snapshot to publish.
-    fn admit(&mut self, g: [C; N], seen: u64, index: FrontIndex) -> Option<Arc<Snapshot<C, N>>> {
+    fn admit(&mut self, g: [C; N], seen: u64, config: &SipConfig) -> Option<Arc<Snapshot<C, N>>> {
         if seen != self.snapshot.version && self.snapshot.dominates(&g) {
             return None;
         }
@@ -627,7 +655,7 @@ impl<C: Cost, const N: usize> Canonical<C, N> {
             return None;
         }
 
-        self.snapshot = Arc::new(self.snapshot.next(&self.front, g, index));
+        self.snapshot = Arc::new(self.snapshot.next(&self.front, g, config));
         Some(Arc::clone(&self.snapshot))
     }
 }
@@ -653,7 +681,7 @@ where
             .entry(y.state.clone())
             .or_insert_with(Canonical::new);
 
-        if let Some(snapshot) = canonical.admit(y.g, y.seen, shared.config.index) {
+        if let Some(snapshot) = canonical.admit(y.g, y.seen, &shared.config) {
             shared.shards[p]
                 .write()
                 .expect("no worker panics while holding a shard")
@@ -686,7 +714,7 @@ where
 
         let Some(y) = queue.pop() else { continue };
 
-        if let Some(snapshot) = frontier.admit(y.g, y.seen, shared.config.index) {
+        if let Some(snapshot) = frontier.admit(y.g, y.seen, &shared.config) {
             *shared
                 .goal_snapshot
                 .write()

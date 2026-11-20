@@ -12,26 +12,49 @@ use crate::check::{check, check_paths};
 use crate::fixtures::{EdgeList, Problem, exact_heuristic, problems};
 
 /// Worker counts and indexes to run every case with.
-const CONFIGS: [SipConfig; 4] = [
+const CONFIGS: [SipConfig; 6] = [
+    // Tiny thresholds: snapshots indexed and consolidated almost at once.
+    SipConfig {
+        search_workers: 2,
+        update_workers: 2,
+        index: FrontIndex::Blocks,
+        index_threshold: 2,
+        delta_min: 1,
+        delta_divisor: 1,
+        block_size: 1,
+    },
+    SipConfig {
+        search_workers: 3,
+        update_workers: 2,
+        index: FrontIndex::Tree,
+        index_threshold: 1,
+        delta_min: 3,
+        delta_divisor: 2,
+        block_size: 2,
+    },
     SipConfig {
         search_workers: 1,
         update_workers: 1,
         index: FrontIndex::None,
+        ..SipConfig::DEFAULT
     },
     SipConfig {
         search_workers: 2,
         update_workers: 3,
         index: FrontIndex::Blocks,
+        ..SipConfig::DEFAULT
     },
     SipConfig {
         search_workers: 4,
         update_workers: 2,
         index: FrontIndex::Tree,
+        ..SipConfig::DEFAULT
     },
     SipConfig {
         search_workers: 3,
         update_workers: 1,
         index: FrontIndex::Blocks,
+        ..SipConfig::DEFAULT
     },
 ];
 
