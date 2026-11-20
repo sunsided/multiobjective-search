@@ -89,7 +89,9 @@ proptest! {
             .copied()
             .filter(|&a| !pairs.iter().any(|&b| b != a && width_dominates(b, a)))
             .collect();
-        front.sort_by_key(|&(c, _)| c);
+        // Non-dominated pairs have distinct costs, so sorting on the whole
+        // pair keeps cost order and makes equal pairs adjacent for `dedup`.
+        front.sort_unstable();
         front.dedup();
 
         let goal = |v: &usize| p.goals[*v];
@@ -220,7 +222,9 @@ fn sums_widths_front<const S: usize, const M: usize>(
         .copied()
         .filter(|a| !labels.iter().any(|b| b != a && no_worse(b, a)))
         .collect();
-    front.sort_by_key(|a| a.0);
+    // One entry per cost, as every search returns: sort on the whole
+    // label so that equal ones are adjacent for `dedup`.
+    front.sort_unstable();
     front.dedup();
     front
 }
