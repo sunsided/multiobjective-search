@@ -13,6 +13,7 @@
 //! | [`boa_star_approx`] | 2 | consistent | BOA* with an additive tolerance on the second objective. |
 //! | [`boa_star_eps`] | 2 | consistent | BOA*ε: BOA* with a factor `1 + ε` on the second objective. |
 //! | [`boa_star_anytime`] | 2 | consistent | A-BOA*ε: anytime, ever better approximations down to the exact front; `_ws` adds weighted-sum pruning, `_basic` is the no-reuse baseline. |
+//! | [`pp_a_star_iterative`] | 2 | consistent | Iterative-PP-A*: PP-A* from scratch over a falling tolerance schedule, the anytime baseline. |
 //! | [`pp_a_star`] | 2 | consistent | PP-A*: path pairs, factors `1 + ε1` and `1 + ε2` on both objectives. |
 //! | [`apex_star`] | any `N` | consistent | A*pex: apex-path pairs, a factor `1 + ε_i` per objective. |
 //! | [`boba_star`] | 2 | computed internally | Bidirectional; needs a [`ReverseGraph`] and a single goal. |
@@ -101,6 +102,6 @@ pub use namoa::{namoa_star, namoa_star_dr};
 pub use namoa_mvh::{namoa_star_dr_mvh, namoa_star_dr_mvh_lazy};
 pub use output::{Output, Solution, Stats};
 pub use pareto::{BiFront, Front, TreeFront};
-pub use pp_a::pp_a_star;
+pub use pp_a::{pp_a_star, pp_a_star_iterative};
 pub use reference::brute_force;
 pub use search_core::{Cost, Heuristic, HeuristicFn, heuristic_fn};

@@ -39,10 +39,14 @@
 //! - Merged pairs re-enter the open list as new entries; the old entry is
 //!   skipped when popped.
 
+mod iterative;
+
 use alloc::collections::{BTreeMap, BinaryHeap};
 use alloc::vec::Vec;
 use core::cmp::Reverse;
 use core::mem;
+
+pub use iterative::pp_a_star_iterative;
 
 use search_core::{Cost, Heuristic};
 

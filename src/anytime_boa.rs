@@ -45,9 +45,11 @@ pub use factor::ApproxFactor;
 /// ran to completion.
 #[derive(Debug, Clone)]
 pub struct AnytimeFront<S, C> {
-    /// Pareto-optimal solutions, one per cost vector, sorted by cost
-    /// lexicographically ascending (first objective strictly ascending,
-    /// second strictly descending). Empty when no goal is reachable.
+    /// Solutions, one per cost vector, sorted by cost lexicographically
+    /// ascending (first objective strictly ascending, second strictly
+    /// descending). Empty when no goal is reachable. Pareto-optimal for
+    /// A-BOA*ε; for [`pp_a_star_iterative`](crate::pp_a_star_iterative)
+    /// only mutually non-dominated until the search is complete.
     pub solutions: Vec<Solution<S, [C; 2]>>,
     /// An `ε` such that every Pareto-optimal cost is within `1 + ε` of
     /// some solution in both objectives. Zero when

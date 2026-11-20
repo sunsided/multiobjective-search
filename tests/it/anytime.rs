@@ -3,8 +3,9 @@
 //! equals BOA*'s, for all three variants, with and without a budget.
 
 use multiobjective_search::{
-    AnytimeFront, ApproxFactor, Heuristic, Solution, Stats, WeightedSum, ZeroHeuristic, boa_star,
-    boa_star_anytime, boa_star_anytime_basic, boa_star_anytime_ws, heuristic_fn,
+    AnytimeFront, ApproxFactor, Epsilon, Heuristic, Solution, Stats, WeightedSum, ZeroHeuristic,
+    boa_star, boa_star_anytime, boa_star_anytime_basic, boa_star_anytime_ws, heuristic_fn,
+    pp_a_star_iterative,
 };
 use proptest::prelude::*;
 
@@ -246,6 +247,96 @@ fn four_routes() {
     );
     let exact = boa_star(&problem.graph, ZeroHeuristic, 0, |v: &usize| *v == 1);
     assert_eq!(result.solutions, exact.solutions);
+}
+
+/// Checks an Iterative-PP-A* report: mutually non-dominated, sorted, and
+/// covering the front within its factor (PP-A* need not return
+/// Pareto-optimal solutions).
+fn check_cover(
+    front: &[[u32; 2]],
+    costs: &[[u32; 2]],
+    factor: ApproxFactor<u32>,
+) -> Result<(), TestCaseError> {
+    prop_assert!(
+        costs
+            .windows(2)
+            .all(|w| w[0][0] < w[1][0] && w[0][1] > w[1][1])
+    );
+    for s in front {
+        let covered = costs
+            .iter()
+            .any(|r| within(factor, r[0], s[0]) && within(factor, r[1], s[1]));
+        prop_assert!(
+            covered,
+            "{:?} not covered by {:?} within {:?}",
+            s,
+            costs,
+            factor
+        );
+    }
+
+    Ok(())
+}
+
+/// Runs Iterative-PP-A* with `schedule` and checks every report, the
+/// falling factors, and the exact front when complete.
+fn check_iterative<H: Heuristic<usize, [u32; 2]>>(
+    problem: &Problem<2>,
+    heuristic: H,
+    schedule: &[Epsilon],
+    limit: Option<usize>,
+) -> Result<(), TestCaseError> {
+    let goal = |v: &usize| problem.goals[*v];
+    let mut reports = Vec::new();
+    let result = pp_a_star_iterative(
+        &problem.graph,
+        heuristic,
+        problem.start,
+        goal,
+        schedule.iter().copied(),
+        recorder(&mut reports),
+        budget(limit),
+    );
+
+    let front = pareto_costs(problem);
+    for (costs, factor) in &reports {
+        check_cover(&front, costs, *factor)?;
+    }
+
+    for pair in reports.windows(2) {
+        prop_assert!(pair[1].1 < pair[0].1);
+    }
+
+    let costs: Vec<_> = result.solutions.iter().map(|s| s.cost).collect();
+    if !schedule.is_empty() {
+        check_cover(&front, &costs, result.factor)?;
+    }
+
+    if result.complete {
+        prop_assert!(result.factor.is_zero());
+        prop_assert_eq!(&costs, &front);
+    }
+
+    let output = multiobjective_search::Output {
+        solutions: result.solutions.clone(),
+        stats: result.stats,
+    };
+    check_paths(problem, &output)
+}
+
+proptest! {
+    /// Iterative-PP-A* with falling schedules ending in zero, with and
+    /// without a budget.
+    #[test]
+    fn iterative_pp_a(p in problems::<2>(), steps in prop::collection::vec((1..=3_u32, 1..=8_u32), 0..4), limit in prop::option::of(0..40_usize)) {
+        let p = scaled(p);
+        let mut schedule: Vec<Epsilon> = steps.iter().map(|&(n, d)| Epsilon::new(n, d)).collect();
+        schedule.sort_by(|a, b| (u64::from(b.num()) * u64::from(a.den())).cmp(&(u64::from(a.num()) * u64::from(b.den()))));
+        schedule.push(Epsilon::ZERO);
+        let h = exact_heuristic(&p);
+        check_iterative(&p, ZeroHeuristic, &schedule, limit)?;
+        check_iterative(&p, heuristic_fn(|v: &usize| h[*v]), &schedule, limit)?;
+    }
 }
 
 proptest! {

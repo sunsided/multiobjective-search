@@ -323,6 +323,7 @@ which restates Pulido 2015. No deviation needed a fix.
 
 `boa_star_anytime` (A-BOA*ε), `boa_star_anytime_ws` (A-BOA*ε-w) and
 `boa_star_anytime_basic` (Basic-A-BOA*ε) share one engine.
+`pp_a_star_iterative` is the paper's Iterative-PP-A* baseline.
 `tests/it/anytime.rs` checks every reported front against brute force
 for its factor, a strictly falling factor schedule, and the final front
 against BOA*, with and without an expansion budget; dropping the kept
@@ -342,7 +343,7 @@ paths or weakening the weighted-sum test fails it.
 | `DF` with a zero `f` component | `ApproxFactor::Infinite`; an infinite interval is refined with `ε = 1` | deliberate: `∞ / d` would never shrink; any finite `ε` keeps Theorem 1 and lets Theorem 2's argument apply |
 | Anytime: solutions can be read off `ILIST` at any time | `on_front` after seeding and whenever the overall factor falls; `Budget<Stats>` stops the search, folding the unexplored open paths into the current interval so the reported factor stays a valid bound | deliberate, follows `heuristic-search`'s anytime callbacks |
 | Single goal | goal predicate; one `g2_min` over all goals | deliberate, as everywhere in the crate |
-| Iterative-PP-A* baseline | not implemented | open: a loop over `pp_a_star` |
+| Iterative-PP-A* baseline: PP-A* from scratch for `ε = 0.01, 0.001, 0.0001, 0` | `pp_a_star_iterative` with a caller's schedule (the paper's in the bench), same `on_front`, `Budget` and `AnytimeFront`; reports a run when its `ε` lowers the factor; the budget is checked between runs | matches. `ε` becomes an `ApproxFactor` scaled by the smallest positive solution cost, since `Cost` has no unit |
 
 ## Testing strategy
 

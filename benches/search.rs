@@ -10,7 +10,7 @@ use multiobjective_search::{
     WeightedSum, ZeroHeuristic, apex_mvh, apex_star, boa_star, boa_star_anytime,
     boa_star_anytime_basic, boa_star_anytime_ws, boa_star_eps, boba_star, emoa_star,
     emoa_star_tree, heuristic_fn, mv_heuristic_fn, namoa_star, namoa_star_dr, namoa_star_dr_mvh,
-    namoa_star_dr_mvh_lazy, pp_a_star,
+    namoa_star_dr_mvh_lazy, pp_a_star, pp_a_star_iterative,
 };
 
 /// Runs every benchmark in this file with criterion's command-line flags.
@@ -234,6 +234,25 @@ fn bench_anytime(c: &mut Criterion) {
                 is_goal,
                 4,
                 weighted,
+                |_, _| {},
+                |_: &_| false,
+            )
+        });
+    });
+    group.bench_function("iterative_pp_a_star", |b| {
+        let schedule = [
+            Epsilon::new(1, 100),
+            Epsilon::new(1, 1000),
+            Epsilon::new(1, 10_000),
+            Epsilon::ZERO,
+        ];
+        b.iter(|| {
+            pp_a_star_iterative(
+                &grid,
+                heuristic_fn(h),
+                black_box(0),
+                is_goal,
+                schedule,
                 |_, _| {},
                 |_: &_| false,
             )
