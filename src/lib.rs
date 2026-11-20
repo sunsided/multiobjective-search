@@ -14,6 +14,7 @@
 //! | [`boa_star_eps`] | 2 | consistent | BOA*ε: BOA* with a factor `1 + ε` on the second objective. |
 //! | [`pp_a_star`] | 2 | consistent | PP-A*: path pairs, factors `1 + ε1` and `1 + ε2` on both objectives. |
 //! | [`boba_star`] | 2 | computed internally | Bidirectional; needs a [`ReverseGraph`] and a single goal. |
+//! | [`boba_star_with`] | 2 | consistent, both directions | [`boba_star`] with caller-supplied heuristics. |
 //! | [`emoa_star`] | any `N` | consistent | Lazy open list, truncated dominance; `O(log n)` checks for 3 objectives. |
 //! | [`emoa_star_tree`] | any `N` | consistent | EMOA* with the paper's balanced-tree frontiers. |
 //! | [`namoa_star_dr`] | any `N` | consistent | NAMOA* with dimensionality reduction. |
@@ -59,7 +60,7 @@ mod pp_a;
 mod reference;
 
 pub use boa::{boa_star, boa_star_approx, boa_star_eps};
-pub use boba::boba_star;
+pub use boba::{boba_star, boba_star_with};
 pub use cost::{Dominates, add, weakly_dominates};
 pub use emoa::{emoa_star, emoa_star_tree};
 pub use epsilon::Epsilon;

@@ -268,9 +268,9 @@ None for milestone 1. Later:
   `Heuristic` for their models. If `heuristic-search` defines a
   single-objective successor trait with the same shape, both may move to
   `search-core` (only once both exist, per architecture.md).
-- BOBA* and the exact test heuristic need single-objective backward
-  Dijkstra. Keep a small private one here rather than depend on
-  `heuristic-search`.
+- BOBA* and the exact test heuristic need single-objective searches. Keep
+  small private ones here (BOBA*'s cost-bounded lexicographic A*) rather
+  than depend on `heuristic-search`.
 
 ## Open questions
 
@@ -282,6 +282,6 @@ None for milestone 1. Later:
   heuristics and BOBA*?
 - Should the crate guard against negative costs (an `Unsigned` marker
   trait) instead of documenting the precondition?
-- Should BOBA* accept user heuristics, or bounded Dijkstra as in the
-  paper? Draft: full Dijkstra, computed internally.
+- BOBA*'s preliminary searches run one after another. The paper runs
+  them two at a time in threads; a `std` feature could add that.
 - Should `brute_force` stay public or move to the tests? Draft: public.

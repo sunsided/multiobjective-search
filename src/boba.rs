@@ -9,13 +9,14 @@
 //! backward search, from the goal over reversed edges in `(f2, f1)` order,
 //! finds them from the cheapest-second end. Neither joins partial paths:
 //! each search runs all the way to the opposite end, with exact
-//! single-objective distances as heuristics. Each search's last solution
+//! single-objective distances as heuristics (or the caller's own, through
+//! [`boba_star_with`]). Each search's last solution
 //! bounds the other's primary objective, so they split the front between
 //! them and stop where they meet.
 //!
 //! ```mermaid
 //! graph TD
-//!     dists[Dijkstra per objective:<br/>to the goal and from the start] --> fwd[Forward BOA*, order f1 f2]
+//!     dists[Cost-bounded searches per objective:<br/>to the goal and from the start] --> fwd[Forward BOA*, order f1 f2]
 //!     dists --> bwd[Backward BOA*, order f2 f1]
 //!     fwd -- "last c2 bounds backward f2" --> bwd
 //!     bwd -- "last c1 bounds forward f1" --> fwd
@@ -27,8 +28,8 @@
 //!
 //! - The searches alternate one label at a time instead of running in
 //!   parallel threads (the crate is `no_std`).
-//! - The heuristics come from four full single-objective Dijkstra searches,
-//!   not the paper's cost-bounded A* searches.
+//! - The four cost-bounded preliminary searches (see `bounds`) run one
+//!   after another instead of two at a time.
 //! - The paper's "early solution update" (joining a label with its
 //!   complementary shortest path) and "secondary heuristic tuning" are not
 //!   implemented.
@@ -36,11 +37,11 @@
 //!   letting both run out; at that point every solution has been found
 //!   (see [`boba_star`]).
 
-mod dijkstra;
+mod bounds;
 
 use alloc::vec::Vec;
 
-use search_core::{Cost, heuristic_fn};
+use search_core::{Cost, Heuristic, heuristic_fn};
 
 use crate::boa::{Search, Tolerance};
 use crate::graph::{Graph, ReverseGraph};
@@ -54,15 +55,19 @@ use crate::output::{Output, Solution, Stats};
 /// - edge costs are non-negative;
 /// - [`ReverseGraph::predecessors`] mirrors [`Graph::successors`] exactly,
 ///   parallel edges included;
-/// - the states reachable from `start`, and the states that reach `goal`,
-///   are finite: the heuristics come from one-to-all Dijkstra searches over
-///   both sets.
+/// - finitely many states lie within the bounds `ub1`, `ub2` (the first
+///   cost of the `(c2, c1)`-optimal path and the second cost of the
+///   `(c1, c2)`-optimal one) of the start and of the goal: the preliminary
+///   searches expand exactly those. An unreachable goal is detected by a
+///   search from the start, which must then terminate too.
 ///
 /// No heuristic is needed: BOBA* computes exact per-objective distances
-/// itself. Solutions are sorted as in [`boa_star`](crate::boa_star): first
+/// itself, with four cost-bounded searches that skip states on no
+/// Pareto-optimal path; see [`boba_star_with`] to supply your own.
+/// Solutions are sorted as in [`boa_star`](crate::boa_star): first
 /// objective strictly ascending, second strictly descending. The counters
-/// in [`Output::stats`] add up both directions and leave out the Dijkstra
-/// searches.
+/// in [`Output::stats`] add up both directions and leave out the
+/// preliminary searches.
 ///
 /// # Why stopping early is safe
 ///
@@ -110,11 +115,81 @@ where
     G: ReverseGraph<Weight = [C; 2]>,
     C: Cost,
 {
-    // shortcut: full one-to-all Dijkstra; the paper's cost-bounded A* explores less.
-    let to_goal = dijkstra::Distances::new(&goal, |s, out| graph.predecessors(s, out));
-    let from_start = dijkstra::Distances::new(&start, |s, out| graph.successors(s, out));
-    let forward_h = heuristic_fn(|s: &G::State| to_goal.get(s));
-    let backward_h = heuristic_fn(|s: &G::State| from_start.get(s).map(swap));
+    let successors = |s: &G::State, out: &mut Vec<_>| graph.successors(s, out);
+    let predecessors = |s: &G::State, out: &mut Vec<_>| graph.predecessors(s, out);
+    let Some(bounds) = bounds::Bounds::new(&start, &goal, successors, predecessors) else {
+        return Output {
+            solutions: Vec::new(),
+            stats: Stats::default(),
+        };
+    };
+
+    let forward_h = heuristic_fn(|s: &G::State| bounds.forward(s));
+    let backward_h = heuristic_fn(|s: &G::State| bounds.backward(s));
+
+    boba_star_with(graph, start, goal, forward_h, backward_h)
+}
+
+/// [`boba_star`] with caller-supplied heuristics instead of the internal
+/// preliminary searches.
+///
+/// - `forward_h(s)` bounds the cost from `s` to `goal` per objective;
+/// - `backward_h(s)` bounds the cost from `start` to `s` per objective, in
+///   the graph's objective order (the backward search swaps them itself).
+///
+/// Requirements, in addition to those of [`boba_star`] (finiteness aside):
+/// both heuristics are consistent in both objectives, along the edges
+/// they are used on (`forward_h(p) <= c(p, s) + forward_h(s)` and
+/// `backward_h(s) <= backward_h(p) + c(p, s)` for every edge `p -> s`), and
+/// zero at `goal` and at `start` respectively. A heuristic may return
+/// `None` only for states on no Pareto-optimal path. Both directions'
+/// stopping rule only needs these lower bounds, so the output equals
+/// [`boa_star`](crate::boa_star)'s in cost vectors for any such pair,
+/// [`ZeroHeuristic`](crate::ZeroHeuristic) included.
+///
+/// # Examples
+///
+/// ```
+/// use multiobjective_search::{Graph, ReverseGraph, ZeroHeuristic, boba_star, boba_star_with};
+///
+/// /// Two routes from 0 to 2: fast but costly, or slow but cheap.
+/// struct Routes;
+///
+/// /// The edges as `(from, to, cost)`.
+/// const EDGES: [(u8, u8, [u32; 2]); 3] = [(0, 1, [1, 5]), (1, 2, [1, 5]), (0, 2, [4, 1])];
+///
+/// impl Graph for Routes {
+///     type State = u8;
+///     type Weight = [u32; 2];
+///
+///     fn successors(&self, state: &u8, out: &mut Vec<(u8, [u32; 2])>) {
+///         out.extend(EDGES.iter().filter(|e| e.0 == *state).map(|e| (e.1, e.2)));
+///     }
+/// }
+///
+/// impl ReverseGraph for Routes {
+///     fn predecessors(&self, state: &u8, out: &mut Vec<(u8, [u32; 2])>) {
+///         out.extend(EDGES.iter().filter(|e| e.1 == *state).map(|e| (e.0, e.2)));
+///     }
+/// }
+///
+/// let blind = boba_star_with(&Routes, 0, 2, ZeroHeuristic, ZeroHeuristic);
+/// assert_eq!(blind.solutions, boba_star(&Routes, 0, 2).solutions);
+/// ```
+pub fn boba_star_with<G, C, F, B>(
+    graph: &G,
+    start: G::State,
+    goal: G::State,
+    forward_h: F,
+    mut backward_h: B,
+) -> Output<G::State, [C; 2]>
+where
+    G: ReverseGraph<Weight = [C; 2]>,
+    C: Cost,
+    F: Heuristic<G::State, [C; 2]>,
+    B: Heuristic<G::State, [C; 2]>,
+{
+    let backward_h = heuristic_fn(move |s: &G::State| backward_h.estimate(s).map(swap));
     let reversed = Reversed(graph);
 
     let is_goal = equals(goal.clone());

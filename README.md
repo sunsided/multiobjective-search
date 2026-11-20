@@ -13,8 +13,10 @@ reference on random graphs with two to four objectives:
       objective (`boa_star_eps`), rational `ε = num / den` (`Epsilon`)
 - [x] PP-A\*: path pairs, tolerances on both objectives (`pp_a_star`); one-sided
       bounded test and `br` returned, so the tolerances never compound
-- [x] BOBA\*: bidirectional bi-objective A* (`boba_star`), without the paper's
-      early solution update and heuristic tuning
+- [x] BOBA\*: bidirectional bi-objective A* (`boba_star`) with the paper's four
+      cost-bounded preliminary searches (run one after another), or with
+      caller-supplied heuristics (`boba_star_with`); without the paper's early
+      solution update and heuristic tuning
 - [x] EMOA\*: multi-objective A* with truncated dominance checks (`emoa_star`),
       sorted `Vec` instead of a balanced tree
 - [x] NAMOA\*: classic multi-objective A* for admissible heuristics (`namoa_star`)

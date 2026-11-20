@@ -1,7 +1,9 @@
 //! BOBA* tests: fixed cases and property-based cross-checks against the
 //! brute-force reference and BOA*.
 
-use multiobjective_search::{Output, boa_star, boba_star, heuristic_fn};
+use multiobjective_search::{
+    Output, ZeroHeuristic, boa_star, boba_star, boba_star_with, heuristic_fn,
+};
 use proptest::prelude::*;
 
 use crate::check::check;
@@ -15,6 +17,26 @@ use crate::fixtures::{EdgeList, Problem, exact_heuristic, single_goal_problems};
 fn solve(problem: &Problem<2>) -> Output<usize, [u32; 2]> {
     let goal = problem.goals.iter().position(|&g| g).expect("one goal");
     boba_star(&problem.graph, problem.start, goal)
+}
+
+/// The same problem with every edge reversed and the start as the only
+/// goal, whose exact heuristic is the exact cost from the start.
+fn reversed(problem: &Problem<2>) -> Problem<2> {
+    Problem {
+        graph: EdgeList {
+            nodes: problem.graph.nodes,
+            edges: problem
+                .graph
+                .edges
+                .iter()
+                .map(|&(a, b, c)| (b, a, c))
+                .collect(),
+        },
+        start: problem.start,
+        goals: (0..problem.graph.nodes)
+            .map(|v| v == problem.start)
+            .collect(),
+    }
 }
 
 /// Builds a problem with a single goal.
@@ -108,5 +130,35 @@ proptest! {
         let boa = boa_star(&p.graph, heuristic_fn(|v: &usize| h[*v]), p.start, |v| p.goals[*v]);
 
         prop_assert_eq!(costs(solve(&p)), costs(boa));
+    }
+
+    /// BOBA* with caller-supplied heuristics, blind or exact in both
+    /// directions, finds exactly the Pareto-optimal cost set.
+    #[test]
+    fn with_heuristics_matches_brute_force(p in single_goal_problems::<2>()) {
+        let goal = p.goals.iter().position(|&g| g).expect("one goal");
+        let to_goal = exact_heuristic(&p);
+        let from_start = exact_heuristic(&reversed(&p));
+
+        let blind = boba_star_with(&p.graph, p.start, goal, ZeroHeuristic, ZeroHeuristic);
+        check(&p, &blind)?;
+
+        let exact = boba_star_with(
+            &p.graph,
+            p.start,
+            goal,
+            heuristic_fn(|v: &usize| to_goal[*v]),
+            heuristic_fn(|v: &usize| from_start[*v]),
+        );
+        check(&p, &exact)?;
+
+        let mixed = boba_star_with(
+            &p.graph,
+            p.start,
+            goal,
+            heuristic_fn(|v: &usize| to_goal[*v]),
+            ZeroHeuristic,
+        );
+        check(&p, &mixed)?;
     }
 }
