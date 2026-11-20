@@ -250,21 +250,25 @@ leave the returned cost vectors unchanged:
 ### A*pex against Algorithm 2
 
 The first draft was written from the paper's description and deviated in
-three rules. All three now follow the paper; each has a regression test
-in `tests/it/apex.rs` that fails on the old code.
+three rules. The draft was sound (it merged less, so it returned more
+solutions), but all three rules now follow the paper. The tests for the
+`f`-based bound and for solution merging fail on the draft. The apex
+update on pruning is only needed once solutions merge, so its test
+passes on the draft and instead fails when the update is removed from
+the current code.
 
 | Paper rule | Here | Status |
 |---|---|---|
 | Open list ordered by lexicographic `f` (line 6) | min-heap on `(f, pair index)` | matches; index breaks ties for determinism |
 | `is_dominated`: a solution whose representative's truncated `f` ε-dominates the pair's truncated `f` (line 20) | `is_covered_by_solution`, objectives `1..N` | matches; was a full-vector check, equivalent because objective 0 always holds (Lemma 1) |
-| On that prune, the solution's apex becomes `min(f(AP), A')` (lines 21-22) | same | bug fixed (needed once solutions merge, footnote 3); test `pruning_lowers_the_solution_apex` |
+| On that prune, the solution's apex becomes `min(f(AP), A')` (lines 21-22) | same | aligned (needed once solutions merge, footnote 3); test `pruning_lowers_the_solution_apex` fails without it |
 | `is_dominated`: truncated `f` weakly dominated by `GTcl(s)` (line 24) | `TruncatedFront` of apexes per state; same `h` at a state, so apex and `f` compare alike | matches |
 | `GTcl(s)` gets `Tr(f(AP))` before the goal test (line 9) | same | matches |
 | Child: apex `A + c`, representative extended by the edge (line 14), checked by `is_dominated` before insertion (line 15) | same | matches |
-| ε-bounded: `f(π) ⪯ε f(AP)` (Contribution 3) | `is_bounded`: `g(rep) + h ≤ (1 + ε)(apex + h)` | bug fixed (was `g(rep) ≤ (1 + ε) apex`, sound but merged less); test `merges_under_the_f_based_bound` |
+| ε-bounded: `f(π) ⪯ε f(AP)` (Contribution 3) | `is_bounded`: `g(rep) + h ≤ (1 + ε)(apex + h)` | aligned (was `g(rep) ≤ (1 + ε) apex`, sound but merged less); test `merges_under_the_f_based_bound` |
 | Merge: component-wise minimum apex, representative by method R, L or G; no merge if the choice is not bounded | method L: lexicographically smaller reverse `g`, first argument on a tie | deliberate deviation from G (the paper's best): G compares ratios `f_i(π) / f_i(AP)`, and `Cost` has neither division nor cost-by-cost products. The old code took the first bounded of the two (new, then open); the rustdoc example changed accordingly |
 | `insert` merges into the first pair of the list it merges with, else adds (lines 27-35) | same, over the open pairs at the state | matches |
-| Goal pair: `insert(AP, solutions)` (line 11) | `insert_solution` | bug fixed (goal pairs were appended unmerged, so the output was larger than the paper's); test `merges_goal_pairs_into_solutions` |
+| Goal pair: `insert(AP, solutions)` (line 11) | `insert_solution` | aligned (goal pairs were appended unmerged, so the output was larger than the paper's); test `merges_goal_pairs_into_solutions` |
 | Single goal state | goal predicate; solution pairs at different goals may merge | deliberate: solution pairs are never extended and `h = 0` at every goal, so the merged representative still covers both apexes |
 | Returns every solution pair's representative (line 18) | drops dominated and duplicate representatives, sorts | deliberate: a dominating representative covers whatever the dropped one covered |
 | Consistent heuristic | documented requirement | matches; the `f`-based bound relies on it to stay bounded under extension |
@@ -342,3 +346,7 @@ None for milestone 1. Later:
 - BOBA*'s preliminary searches run one after another. The paper runs
   them two at a time in threads; a `std` feature could add that.
 - Should `brute_force` stay public or move to the tests? Draft: public.
+- A*pex uses the paper's L merge method. The G method, the paper's
+  fastest, needs exact slack-ratio comparisons, which `Cost` cannot do;
+  it would need a cost-by-cost product (or a widening conversion) in
+  `search-core`. Draft: L.
