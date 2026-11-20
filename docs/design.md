@@ -210,8 +210,8 @@ for sol in &out.solutions {
   2006.10302).
 - **A\*pex:** H. Zhang, O. Salzman, T. K. S. Kumar, A. Felner, C.
   Hernández, S. Koenig. "A*pex: Efficient Approximate Multi-Objective
-  Search on Graphs." ICAPS 2022. Implemented from the description; not
-  checked against the paper's pseudocode.
+  Search on Graphs." ICAPS 2022. Checked against Algorithm 2 of the
+  paper; see the table below.
 - **EMOA\*:** Z. Ren, R. Zhan, S. Rathinam, M. Likhachev, H. Choset.
   "Enhanced Multi-Objective A* Using Balanced Binary Search Trees." SoCS
   2022.
@@ -221,12 +221,17 @@ for sol in &out.solutions {
 The algorithms were first written from memory, then checked line by line
 against the papers' pseudocode: BOA* against the AIJ 2023 version
 (Algorithm 3), NAMOA* against IJCAI 2005 and the JACM-adapted table in
-Pulido's PhD thesis (the JACM paper itself was not accessible), NAMOA*dr
-against the thesis (Tables 4.4 and 4.5, Definition 4.5, eq. 4.9), EMOA*
+Pulido's PhD thesis, NAMOA*dr against the thesis (Tables 4.4 and 4.5,
+Definition 4.5, eq. 4.9), A*pex against the ICAPS 2022 paper
+(Algorithm 2), EMOA*
 against arXiv 2202.08992 (Algorithms 1 to 3), PP-A* and BOA*ε against
 arXiv 2006.10302v2, and BOBA* against arXiv 2105.11888v2 (Algorithms 1
-and 2). No behavioural deviation needed a fix. The remaining differences
-are deliberate and leave the returned cost vectors unchanged:
+and 2). The JACM 2010 NAMOA* paper and Pulido et al. 2015 (C&OR) were
+not reachable: the paperity.org mirror of the JACM paper and the
+ScienceDirect page both answer automated requests with a Cloudflare
+block, so the thesis-based checks stand for those two. Only A*pex needed
+fixes (below). The remaining differences elsewhere are deliberate and
+leave the returned cost vectors unchanged:
 
 | Algorithm | Paper | Here | Why the cost vectors do not change |
 |---|---|---|---|
@@ -239,9 +244,30 @@ are deliberate and leave the returned cost vectors unchanged:
 | NAMOA*dr | `t`-discard with case split on `v1` | weak dominance on objectives `1..N` | lexicographic order makes the first objective of closed labels and solutions no larger; equality in all objectives is the duplicate case above |
 | EMOA* | AVL tree per frontier | sorted `Vec` (`emoa_star`), treap (`emoa_star_tree`) | same queries; the tree also prunes by subtree bounding boxes |
 | PP-A* | two-sided bounded test, returns `tl` | one-sided (first objective), returns `br` | a different but proven covering; see `pp_a_star` |
-| A*pex | representative chosen by a heuristic score when merging; goal pairs merged with solutions | first of the two representatives the merged apex bounds; no solution merging | every covering is relative to an apex that only goes down; see `apex_star` |
 | BOBA* | preliminary searches and directions in parallel threads | sequential by default; threads behind the `parallel` feature | same distances; the join drops boundary vectors a late bound leaves |
 | BOBA* | early solution update, heuristic tuning | implemented; the join of the two directions also drops a dominated boundary solution | an early solution made before the other direction's bound arrives can be dominated by that direction's first |
+
+### A*pex against Algorithm 2
+
+The first draft was written from the paper's description and deviated in
+three rules. All three now follow the paper; each has a regression test
+in `tests/it/apex.rs` that fails on the old code.
+
+| Paper rule | Here | Status |
+|---|---|---|
+| Open list ordered by lexicographic `f` (line 6) | min-heap on `(f, pair index)` | matches; index breaks ties for determinism |
+| `is_dominated`: a solution whose representative's truncated `f` ε-dominates the pair's truncated `f` (line 20) | `is_covered_by_solution`, objectives `1..N` | matches; was a full-vector check, equivalent because objective 0 always holds (Lemma 1) |
+| On that prune, the solution's apex becomes `min(f(AP), A')` (lines 21-22) | same | bug fixed (needed once solutions merge, footnote 3); test `pruning_lowers_the_solution_apex` |
+| `is_dominated`: truncated `f` weakly dominated by `GTcl(s)` (line 24) | `TruncatedFront` of apexes per state; same `h` at a state, so apex and `f` compare alike | matches |
+| `GTcl(s)` gets `Tr(f(AP))` before the goal test (line 9) | same | matches |
+| Child: apex `A + c`, representative extended by the edge (line 14), checked by `is_dominated` before insertion (line 15) | same | matches |
+| ε-bounded: `f(π) ⪯ε f(AP)` (Contribution 3) | `is_bounded`: `g(rep) + h ≤ (1 + ε)(apex + h)` | bug fixed (was `g(rep) ≤ (1 + ε) apex`, sound but merged less); test `merges_under_the_f_based_bound` |
+| Merge: component-wise minimum apex, representative by method R, L or G; no merge if the choice is not bounded | method L: lexicographically smaller reverse `g`, first argument on a tie | deliberate deviation from G (the paper's best): G compares ratios `f_i(π) / f_i(AP)`, and `Cost` has neither division nor cost-by-cost products. The old code took the first bounded of the two (new, then open); the rustdoc example changed accordingly |
+| `insert` merges into the first pair of the list it merges with, else adds (lines 27-35) | same, over the open pairs at the state | matches |
+| Goal pair: `insert(AP, solutions)` (line 11) | `insert_solution` | bug fixed (goal pairs were appended unmerged, so the output was larger than the paper's); test `merges_goal_pairs_into_solutions` |
+| Single goal state | goal predicate; solution pairs at different goals may merge | deliberate: solution pairs are never extended and `h = 0` at every goal, so the merged representative still covers both apexes |
+| Returns every solution pair's representative (line 18) | drops dominated and duplicate representatives, sorts | deliberate: a dominating representative covers whatever the dropped one covered |
+| Consistent heuristic | documented requirement | matches; the `f`-based bound relies on it to stay bounded under extension |
 
 ## Testing strategy
 

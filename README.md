@@ -14,7 +14,8 @@ reference on random graphs with two to four objectives:
 - [x] PP-A\*: path pairs, tolerances on both objectives (`pp_a_star`); one-sided
       bounded test and `br` returned, so the tolerances never compound
 - [x] A\*pex: approximate search for any number of objectives over
-      apex-path pairs (`apex_star`), tolerance `1 + ε_i` per objective
+      apex-path pairs (`apex_star`), tolerance `1 + ε_i` per objective;
+      checked against the paper's Algorithm 2, with its L merge method
 - [x] BOBA\*: bidirectional bi-objective A* (`boba_star`) with the paper's four
       cost-bounded preliminary searches (run one after another), or with
       caller-supplied heuristics (`boba_star_with`); with the paper's early
