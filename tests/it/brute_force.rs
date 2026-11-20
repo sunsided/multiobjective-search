@@ -8,23 +8,23 @@
 use crate::fixtures::Problem;
 
 /// The Pareto-optimal cost vectors from start to any goal, sorted
-/// ascending, without duplicates.
-pub fn pareto_costs(problem: &Problem) -> Vec<[u32; 2]> {
+/// lexicographically ascending, without duplicates.
+pub fn pareto_costs<const N: usize>(problem: &Problem<N>) -> Vec<[u32; N]> {
     let mut costs = Vec::new();
     let mut visited = vec![false; problem.graph.nodes];
-    collect_path_costs(problem, problem.start, [0, 0], &mut visited, &mut costs);
+    collect_path_costs(problem, problem.start, [0; N], &mut visited, &mut costs);
 
     non_dominated(&costs)
 }
 
 /// Depth-first enumeration of simple paths from `node`, pushing the cost of
 /// every path that ends in a goal.
-fn collect_path_costs(
-    problem: &Problem,
+fn collect_path_costs<const N: usize>(
+    problem: &Problem<N>,
     node: usize,
-    cost: [u32; 2],
+    cost: [u32; N],
     visited: &mut [bool],
-    out: &mut Vec<[u32; 2]>,
+    out: &mut Vec<[u32; N]>,
 ) {
     if problem.goals[node] {
         out.push(cost);
@@ -34,7 +34,7 @@ fn collect_path_costs(
 
     for &(from, to, edge) in &problem.graph.edges {
         if from == node && !visited[to] {
-            let next = [cost[0] + edge[0], cost[1] + edge[1]];
+            let next = core::array::from_fn(|i| cost[i] + edge[i]);
             collect_path_costs(problem, to, next, visited, out);
         }
     }
@@ -42,13 +42,13 @@ fn collect_path_costs(
     visited[node] = false;
 }
 
-/// Naive `O(n²)` filter: keeps each vector that no other vector beats in
-/// one objective while matching or beating it in the other.
-pub fn non_dominated(costs: &[[u32; 2]]) -> Vec<[u32; 2]> {
-    let mut kept: Vec<[u32; 2]> = costs
+/// Naive `O(n²)` filter: keeps each vector that no other, different vector
+/// matches or beats in every objective. Sorted, without duplicates.
+pub fn non_dominated<const N: usize>(costs: &[[u32; N]]) -> Vec<[u32; N]> {
+    let mut kept: Vec<[u32; N]> = costs
         .iter()
         .copied()
-        .filter(|c| !costs.iter().any(|o| o[0] <= c[0] && o[1] <= c[1] && o != c))
+        .filter(|c| !costs.iter().any(|o| o != c && (0..N).all(|i| o[i] <= c[i])))
         .collect();
 
     kept.sort_unstable();

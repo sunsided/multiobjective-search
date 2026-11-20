@@ -39,4 +39,4 @@ pub use boa::boa_star;
 pub use cost::{Cost, Dominates, add, weakly_dominates};
 pub use graph::{Graph, Heuristic, ZeroHeuristic};
 pub use output::{Output, Solution, Stats};
-pub use pareto::BiFront;
+pub use pareto::{BiFront, Front};

@@ -9,7 +9,7 @@ use crate::fixtures::{EdgeList, Problem, exact_heuristic, problems};
 
 /// Runs BOA* on `problem` with the given heuristic.
 fn solve<H: Heuristic<usize, [u32; 2]>>(
-    problem: &Problem,
+    problem: &Problem<2>,
     heuristic: &H,
 ) -> Output<usize, [u32; 2]> {
     boa_star(&problem.graph, heuristic, problem.start, |v| {
@@ -18,7 +18,7 @@ fn solve<H: Heuristic<usize, [u32; 2]>>(
 }
 
 /// Runs BOA* with the exact backward-distance heuristic.
-fn solve_informed(problem: &Problem) -> Output<usize, [u32; 2]> {
+fn solve_informed(problem: &Problem<2>) -> Output<usize, [u32; 2]> {
     let h = exact_heuristic(problem);
     solve(problem, &|v: &usize| h[*v])
 }
@@ -26,7 +26,7 @@ fn solve_informed(problem: &Problem) -> Output<usize, [u32; 2]> {
 /// Checks every solution: cost set equals the reference, the order is
 /// strictly increasing in the first objective, and each path is a real
 /// start-to-goal path whose cost matches.
-fn check(problem: &Problem, out: &Output<usize, [u32; 2]>) -> Result<(), TestCaseError> {
+fn check(problem: &Problem<2>, out: &Output<usize, [u32; 2]>) -> Result<(), TestCaseError> {
     let costs: Vec<_> = out.solutions.iter().map(|s| s.cost).collect();
     prop_assert_eq!(&costs, &pareto_costs(problem));
 
@@ -45,7 +45,7 @@ fn check(problem: &Problem, out: &Output<usize, [u32; 2]>) -> Result<(), TestCas
 
 /// Every cost vector a path can have, over all choices among parallel
 /// edges. Empty if some step has no edge.
-fn path_costs(graph: &EdgeList, path: &[usize]) -> Vec<[u32; 2]> {
+fn path_costs(graph: &EdgeList<2>, path: &[usize]) -> Vec<[u32; 2]> {
     let mut costs = vec![[0, 0]];
 
     for step in path.windows(2) {
@@ -66,7 +66,12 @@ fn path_costs(graph: &EdgeList, path: &[usize]) -> Vec<[u32; 2]> {
 }
 
 /// Builds a problem with a single goal.
-fn problem(nodes: usize, edges: &[(usize, usize, [u32; 2])], start: usize, goal: usize) -> Problem {
+fn problem(
+    nodes: usize,
+    edges: &[(usize, usize, [u32; 2])],
+    start: usize,
+    goal: usize,
+) -> Problem<2> {
     Problem {
         graph: EdgeList {
             nodes,
@@ -138,13 +143,13 @@ fn hand_computed() {
 proptest! {
     /// Uninformed BOA* finds exactly the Pareto-optimal cost set.
     #[test]
-    fn zero_heuristic_matches_brute_force(p in problems()) {
+    fn zero_heuristic_matches_brute_force(p in problems::<2>()) {
         check(&p, &solve(&p, &ZeroHeuristic))?;
     }
 
     /// BOA* with an exact, consistent heuristic finds the same set.
     #[test]
-    fn exact_heuristic_matches_brute_force(p in problems()) {
+    fn exact_heuristic_matches_brute_force(p in problems::<2>()) {
         check(&p, &solve_informed(&p))?;
     }
 }

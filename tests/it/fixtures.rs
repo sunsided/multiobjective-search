@@ -1,4 +1,4 @@
-//! Test graphs, a proptest strategy for them, and an exact heuristic.
+//! Test graphs, proptest strategies for them, and exact heuristics.
 
 use multiobjective_search::Graph;
 use proptest::prelude::*;
@@ -13,20 +13,20 @@ const MAX_EDGES: usize = 20;
 /// zero-cost cycles are common.
 const MAX_COST: u32 = 4;
 
-/// A directed multigraph over nodes `0..nodes` with two-objective costs.
+/// A directed multigraph over nodes `0..nodes` with `N`-objective costs.
 #[derive(Debug, Clone)]
-pub struct EdgeList {
+pub struct EdgeList<const N: usize> {
     /// Number of nodes. At least 1.
     pub nodes: usize,
     /// Edges as `(from, to, cost)`. Self-loops and parallel edges allowed.
-    pub edges: Vec<(usize, usize, [u32; 2])>,
+    pub edges: Vec<(usize, usize, [u32; N])>,
 }
 
-impl Graph for EdgeList {
+impl<const N: usize> Graph for EdgeList<N> {
     type State = usize;
-    type Weight = [u32; 2];
+    type Weight = [u32; N];
 
-    fn successors(&self, state: &usize, out: &mut Vec<(usize, [u32; 2])>) {
+    fn successors(&self, state: &usize, out: &mut Vec<(usize, [u32; N])>) {
         out.extend(
             self.edges
                 .iter()
@@ -38,9 +38,9 @@ impl Graph for EdgeList {
 
 /// A search problem: graph, start node and goal set.
 #[derive(Debug, Clone)]
-pub struct Problem {
+pub struct Problem<const N: usize> {
     /// The graph.
-    pub graph: EdgeList,
+    pub graph: EdgeList<N>,
     /// Start node, in `0..graph.nodes`.
     pub start: usize,
     /// `goals[v]` is `true` if node `v` is a goal. Length `graph.nodes`.
@@ -49,11 +49,10 @@ pub struct Problem {
 
 /// Generates small random problems with one or more goals (possibly none
 /// reachable, possibly the start).
-pub fn problems() -> impl Strategy<Value = Problem> {
+pub fn problems<const N: usize>() -> impl Strategy<Value = Problem<N>> {
     (1..=MAX_NODES).prop_flat_map(|nodes| {
-        let edge = (0..nodes, 0..nodes, [0..=MAX_COST, 0..=MAX_COST]);
         (
-            prop::collection::vec(edge, 0..=MAX_EDGES),
+            edges::<N>(nodes),
             0..nodes,
             prop::collection::vec(prop::bool::weighted(0.3), nodes),
         )
@@ -65,24 +64,34 @@ pub fn problems() -> impl Strategy<Value = Problem> {
     })
 }
 
+/// Random edge lists over `nodes` nodes with costs in `0..=MAX_COST`.
+fn edges<const N: usize>(nodes: usize) -> impl Strategy<Value = Vec<(usize, usize, [u32; N])>> {
+    let edge = (0..nodes, 0..nodes, prop::array::uniform(0..=MAX_COST));
+    prop::collection::vec(edge, 0..=MAX_EDGES)
+}
+
 /// Exact remaining cost per objective, computed independently for each
 /// objective by backward Bellman-Ford from the goal set.
 ///
 /// Entry `v` is `None` if no goal is reachable from `v`. Exact distances
-/// are consistent and zero on goals, as BOA* requires.
-pub fn exact_heuristic(problem: &Problem) -> Vec<Option<[u32; 2]>> {
-    let first = backward_distances(problem, 0);
-    let second = backward_distances(problem, 1);
+/// are consistent and zero on goals.
+pub fn exact_heuristic<const N: usize>(problem: &Problem<N>) -> Vec<Option<[u32; N]>> {
+    let per_objective: Vec<_> = (0..N).map(|i| backward_distances(problem, i)).collect();
 
-    first
-        .into_iter()
-        .zip(second)
-        .map(|(a, b)| Some([a?, b?]))
+    (0..problem.graph.nodes)
+        .map(|v| {
+            let mut h = [0; N];
+            for (i, dist) in per_objective.iter().enumerate() {
+                h[i] = dist[v]?;
+            }
+
+            Some(h)
+        })
         .collect()
 }
 
 /// Shortest distance from every node to the goal set in one objective.
-fn backward_distances(problem: &Problem, objective: usize) -> Vec<Option<u32>> {
+fn backward_distances<const N: usize>(problem: &Problem<N>, objective: usize) -> Vec<Option<u32>> {
     let mut dist: Vec<Option<u32>> = problem
         .goals
         .iter()
