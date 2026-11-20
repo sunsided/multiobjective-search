@@ -25,6 +25,8 @@
 //! | [`namoa_star_dr_mvh`] | any `N` | consistent, multi-valued | NAMOA*dr-mvh: one label per estimate; a baseline, slower than the lazy variant. |
 //! | [`namoa_star`] | any `N` | admissible | Classic baseline; label-setting with [`ZeroHeuristic`]. |
 //! | [`minsum_maxmin`] | sum + bottleneck | consistent on the sum | Minimal cost, maximal bottleneck capacity (Martins 1984). |
+//! | [`minsum_maxmin_multi`] | `N` sums + `M` bottlenecks | consistent on the sums | Several maxmin objectives. |
+//! | [`min_cost_capacity_ratio`], [`quickest_path`] | sum + bottleneck | consistent on the sum | Ratio and quickest-path objectives read off the minsum–maxmin front. |
 //! | [`constrained_shortest_path`] | 2 | consistent | Cheapest path with the second cost within a budget. |
 //! | [`ranking`] | 2 | consistent | The classic ranking method: loopless paths by first cost. |
 //! | [`brute_force`] | any `N` | none | Exhaustive reference for tests on small graphs. |
@@ -101,7 +103,10 @@ pub use boa::{boa_star, boa_star_approx, boa_star_eps};
 pub use boba::{boba_star, boba_star_with};
 #[cfg(feature = "parallel")]
 pub use boba::{boba_star_parallel, boba_star_with_parallel};
-pub use bottleneck::{Bottleneck, minsum_maxmin};
+pub use bottleneck::{
+    Bottleneck, SumsAndWidths, WidePath, min_cost_capacity_ratio, minsum_maxmin,
+    minsum_maxmin_multi, quickest_path,
+};
 pub use constrained::constrained_shortest_path;
 pub use cost::{Dominates, add, weakly_dominates};
 pub use dimacs::{DimacsError, DimacsErrorKind, RoadGraph};

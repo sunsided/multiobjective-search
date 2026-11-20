@@ -3,7 +3,8 @@
 //! each against exhaustive enumeration of simple paths.
 
 use multiobjective_search::{
-    Graph, Stats, ZeroHeuristic, constrained_shortest_path, heuristic_fn, minsum_maxmin, ranking,
+    Graph, Stats, ZeroHeuristic, constrained_shortest_path, heuristic_fn, minsum_maxmin,
+    minsum_maxmin_multi, ranking,
 };
 use proptest::prelude::*;
 
@@ -130,5 +131,168 @@ proptest! {
         check(&p, &ranking(&p.graph, ZeroHeuristic, p.start, goal))?;
         check(&p, &ranking(&p.graph, heuristic_fn(|v: &usize| h[*v]), p.start, goal))?;
         prop_assert!(!pareto_costs(&p).is_empty() || ranking(&p.graph, ZeroHeuristic, p.start, goal).solutions.is_empty());
+    }
+}
+
+/// Every simple start–goal path of `problem` as its list of edge costs,
+/// for any number of objectives.
+fn paths_n<const N: usize>(problem: &Problem<N>) -> Vec<Vec<[u32; N]>> {
+    fn walk<const N: usize>(
+        problem: &Problem<N>,
+        node: usize,
+        visited: &mut Vec<bool>,
+        edges: &mut Vec<[u32; N]>,
+        out: &mut Vec<Vec<[u32; N]>>,
+    ) {
+        if problem.goals[node] {
+            out.push(edges.clone());
+        }
+
+        visited[node] = true;
+        for &(from, to, cost) in &problem.graph.edges {
+            if from == node && !visited[to] {
+                edges.push(cost);
+                walk(problem, to, visited, edges, out);
+                edges.pop();
+            }
+        }
+
+        visited[node] = false;
+    }
+
+    let mut out = Vec::new();
+    walk(
+        problem,
+        problem.start,
+        &mut vec![false; problem.graph.nodes],
+        &mut Vec::new(),
+        &mut out,
+    );
+    out
+}
+
+/// A three-component edge list read as `S` sums and `3 - S` capacities.
+struct Split<'a, const S: usize, const M: usize>(&'a EdgeList<3>);
+
+impl<const S: usize, const M: usize> Graph for Split<'_, S, M> {
+    type State = usize;
+    type Weight = ([u32; S], [u32; M]);
+
+    fn successors(&self, state: &usize, out: &mut Vec<(usize, ([u32; S], [u32; M]))>) {
+        let mut edges = Vec::new();
+        self.0.successors(state, &mut edges);
+        out.extend(edges.into_iter().map(|(t, c)| {
+            (
+                t,
+                (
+                    core::array::from_fn(|i| c[i]),
+                    core::array::from_fn(|i| c[S + i]),
+                ),
+            )
+        }));
+    }
+}
+
+/// The non-dominated `(sums, widths)` of the paths of `problem` (sums
+/// minimized, widths maximized, `None` unbounded), sorted by sums.
+fn sums_widths_front<const S: usize, const M: usize>(
+    problem: &Problem<3>,
+) -> Vec<([u32; S], [Option<u32>; M])> {
+    let wide = |a: Option<u32>, b: Option<u32>| match (a, b) {
+        (None, _) => true,
+        (Some(_), None) => false,
+        (Some(x), Some(y)) => x >= y,
+    };
+    let labels: Vec<([u32; S], [Option<u32>; M])> = paths_n(problem)
+        .iter()
+        .map(|edges| {
+            (
+                core::array::from_fn(|i| edges.iter().map(|c| c[i]).sum()),
+                core::array::from_fn(|i| edges.iter().map(|c| c[S + i]).min()),
+            )
+        })
+        .collect();
+    let no_worse = |a: &([u32; S], [Option<u32>; M]), b: &([u32; S], [Option<u32>; M])| {
+        (0..S).all(|i| a.0[i] <= b.0[i]) && (0..M).all(|i| wide(a.1[i], b.1[i]))
+    };
+    let mut front: Vec<_> = labels
+        .iter()
+        .copied()
+        .filter(|a| !labels.iter().any(|b| b != a && no_worse(b, a)))
+        .collect();
+    front.sort_by_key(|a| a.0);
+    front.dedup();
+    front
+}
+
+/// Checks [`minsum_maxmin_multi`] with `S` sums and `M = 3 - S` widths.
+fn check_multi<const S: usize, const M: usize>(p: &Problem<3>) -> Result<(), TestCaseError> {
+    let goal = |v: &usize| p.goals[*v];
+    let out = minsum_maxmin_multi(&Split::<S, M>(&p.graph), ZeroHeuristic, p.start, goal);
+    let mut found: Vec<_> = out.solutions.iter().map(|s| s.cost).collect();
+    let mut expected = sums_widths_front::<S, M>(p);
+    // Equal sums order by width; compare as sets.
+    found.sort_by(|a, b| format!("{a:?}").cmp(&format!("{b:?}")));
+    expected.sort_by(|a, b| format!("{a:?}").cmp(&format!("{b:?}")));
+    prop_assert_eq!(found, expected);
+    Ok(())
+}
+
+/// Exact `sum / width` order for the brute force (`None` width is 0).
+fn ratio_key(sum: u32, width: Option<u32>) -> (bool, u128, u128) {
+    match width {
+        Some(0) if sum > 0 => (true, 0, 1),
+        None | Some(0) => (false, 0, 1),
+        Some(w) => (false, u128::from(sum), u128::from(w)),
+    }
+}
+
+proptest! {
+    /// Several bottlenecks: one sum with two widths, two sums with one.
+    #[test]
+    fn multi_bottleneck_matches_enumeration(p in problems::<3>()) {
+        check_multi::<1, 2>(&p)?;
+        check_multi::<2, 1>(&p)?;
+    }
+
+    /// The cost/capacity ratio and the quickest path match the best over
+    /// all simple paths, compared exactly.
+    #[test]
+    fn ratio_and_quickest_match_enumeration(p in problems::<2>(), sigma in 0..50_u32) {
+        let goal = |v: &usize| p.goals[*v];
+        let zero = heuristic_fn(|_: &usize| Some(0_u32));
+        let pairs: Vec<(u32, Option<u32>)> = all_paths(&p)
+            .iter()
+            .map(|edges| (edges.iter().map(|c| c[0]).sum(), edges.iter().map(|c| c[1]).min()))
+            .collect();
+
+        let less = |a: (bool, u128, u128), b: (bool, u128, u128)| match (a.0, b.0) {
+            (true, _) => false,
+            (false, true) => true,
+            _ => a.1 * b.2 < b.1 * a.2,
+        };
+        let best_ratio = pairs.iter().map(|&(s, w)| ratio_key(s, w)).reduce(|a, b| if less(b, a) { b } else { a });
+        let got = multiobjective_search::min_cost_capacity_ratio(&Capacities(&p.graph), zero, p.start, goal);
+        prop_assert_eq!(got.is_some(), best_ratio.is_some());
+        if let (Some(got), Some(best)) = (got, best_ratio) {
+            let key = ratio_key(got.cost.0, got.cost.1);
+            prop_assert!(!less(best, key) && !less(key, best));
+        }
+
+        // Time as an exact fraction (d·c + σ) / c; `None` and σ = 0 give d.
+        let time = |d: u32, c: Option<u32>| -> (bool, u128, u128) {
+            match c {
+                Some(0) if sigma > 0 => (true, 0, 1),
+                Some(c) if sigma > 0 => (false, u128::from(d) * u128::from(c) + u128::from(sigma), u128::from(c)),
+                _ => (false, u128::from(d), 1),
+            }
+        };
+        let best_time = pairs.iter().map(|&(d, c)| time(d, c)).reduce(|a, b| if less(b, a) { b } else { a });
+        let got = multiobjective_search::quickest_path(&Capacities(&p.graph), zero, p.start, goal, sigma);
+        prop_assert_eq!(got.is_some(), best_time.is_some());
+        if let (Some(got), Some(best)) = (got, best_time) {
+            let key = time(got.cost.0, got.cost.1);
+            prop_assert!(!less(best, key) && !less(key, best), "{:?} vs {:?}", key, best);
+        }
     }
 }

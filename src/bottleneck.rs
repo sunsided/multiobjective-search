@@ -6,6 +6,9 @@
 //! multi-objective shortest path problems with a `MaxMin` cost function",
 //! 4OR 2006. Surveyed by Craveirinha et al., Algorithms 17(6):222, 2024.
 
+mod multi;
+mod ratio;
+
 use alloc::collections::{BTreeMap, BinaryHeap};
 use alloc::vec::Vec;
 use core::cmp::Reverse;
@@ -14,6 +17,9 @@ use search_core::{Cost, Heuristic};
 
 use crate::graph::Graph;
 use crate::output::{Output, Solution, Stats};
+
+pub use multi::{SumsAndWidths, minsum_maxmin_multi};
+pub use ratio::{WidePath, min_cost_capacity_ratio, quickest_path};
 
 /// The capacity of a path: the smallest capacity of its edges, or `None`
 /// (unbounded) for the empty path.
