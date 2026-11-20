@@ -547,3 +547,99 @@ fn scaled2(mut problem: Problem<2>) -> Problem<2> {
 
     problem
 }
+
+/// Simple paths that end at their first goal, as edge cost lists, for any
+/// number of components.
+fn goal_paths<const N: usize>(problem: &Problem<N>) -> Vec<Vec<[u32; N]>> {
+    fn walk<const N: usize>(
+        p: &Problem<N>,
+        at: usize,
+        seen: &mut Vec<bool>,
+        edges: &mut Vec<[u32; N]>,
+        out: &mut Vec<Vec<[u32; N]>>,
+    ) {
+        if p.goals[at] {
+            out.push(edges.clone());
+            return;
+        }
+
+        seen[at] = true;
+        for &(f, t, c) in &p.graph.edges {
+            if f == at && !seen[t] {
+                edges.push(c);
+                walk(p, t, seen, edges, out);
+                edges.pop();
+            }
+        }
+
+        seen[at] = false;
+    }
+
+    let mut out = Vec::new();
+    walk(
+        problem,
+        problem.start,
+        &mut vec![false; problem.graph.nodes],
+        &mut Vec::new(),
+        &mut out,
+    );
+    out
+}
+
+/// Reads `[c, a, b]` as `(c, (1 + min(a, b), 1 + max(a, b)))`.
+struct Reliable<'a>(&'a EdgeList<3>);
+
+impl Graph for Reliable<'_> {
+    type State = usize;
+    type Weight = (u32, (u32, u32));
+
+    fn successors(&self, state: &usize, out: &mut Vec<(usize, (u32, (u32, u32)))>) {
+        let mut edges = Vec::new();
+        self.0.successors(state, &mut edges);
+        out.extend(
+            edges
+                .into_iter()
+                .map(|(t, c)| (t, (c[0], (1 + c[1].min(c[2]), 1 + c[1].max(c[2]))))),
+        );
+    }
+}
+
+proptest! {
+    /// Dinkelbach finds the smallest `Σc1 / Σc2`, and the cost/reliability
+    /// scan the smallest cost over reliability, both against enumeration
+    /// with exact rational comparisons.
+    #[test]
+    fn ratios_match_enumeration(p in problems::<2>(), q in problems::<3>()) {
+        let goal = |v: &usize| p.goals[*v];
+        let best = goal_paths(&p)
+            .iter()
+            .map(|e| (e.iter().map(|c| u128::from(c[0])).sum::<u128>(), e.iter().map(|c| u128::from(c[1])).sum::<u128>()))
+            .filter(|&(_, d)| d > 0)
+            .reduce(|a, b| if b.0 * a.1 < a.0 * b.1 { b } else { a });
+        let got = multiobjective_search::min_ratio_path(&p.graph, p.start, goal);
+        prop_assert_eq!(got.is_some(), best.is_some());
+        if let (Some(got), Some((n, d))) = (got, best) {
+            let (gn, gd) = (u128::from(got.cost[0]), u128::from(got.cost[1]));
+            prop_assert_eq!(gn * d, n * gd);
+        }
+
+        let goal = |v: &usize| q.goals[*v];
+        // Ratio c · Π den / Π num as (numerator, denominator).
+        let ratio = |e: &Vec<[u32; 3]>| {
+            let (mut num, mut den) = (e.iter().map(|c| u128::from(c[0])).sum::<u128>(), 1_u128);
+            for c in e {
+                num *= u128::from(1 + c[1].max(c[2]));
+                den *= u128::from(1 + c[1].min(c[2]));
+            }
+            (num, den)
+        };
+        let best = goal_paths(&q).iter().map(ratio).reduce(|a, b| if b.0 * a.1 < a.0 * b.1 { b } else { a });
+        let got = multiobjective_search::min_cost_reliability_ratio(&Reliable(&q.graph), q.start, goal);
+        prop_assert_eq!(got.is_some(), best.is_some());
+        if let (Some((solution, (num, den))), Some(best)) = (got, best) {
+            let value = |limbs: &[u32]| limbs.iter().rev().fold(0_u128, |v, &l| (v << 32) | u128::from(l));
+            let (rn, rd) = (u128::from(solution.cost) * value(&den), value(&num));
+            prop_assert_eq!(rn * best.1, best.0 * rd);
+        }
+    }
+}

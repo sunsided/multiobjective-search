@@ -195,3 +195,79 @@ proptest! {
         prop_assert_eq!(got, kept);
     }
 }
+
+/// Small random problems for the exponential pair-space searches: up to
+/// six nodes and twelve edges.
+fn small() -> impl Strategy<Value = crate::fixtures::Problem<2>> {
+    (2..=6_usize).prop_flat_map(|nodes| {
+        let edge = (0..nodes, 0..nodes, prop::array::uniform2(0..=4_u32));
+        (prop::collection::vec(edge, 0..=12), 0..nodes).prop_map(move |(edges, start)| {
+            crate::fixtures::Problem {
+                graph: EdgeList { nodes, edges },
+                start,
+                goals: vec![false; nodes],
+            }
+        })
+    })
+}
+
+/// The Pareto front of `points` (both minimized), sorted, without
+/// duplicates.
+fn pareto(points: &[[u32; 2]]) -> Vec<[u32; 2]> {
+    let mut front: Vec<_> = points
+        .iter()
+        .copied()
+        .filter(|a| {
+            !points
+                .iter()
+                .any(|b| b != a && b[0] <= a[0] && b[1] <= a[1])
+        })
+        .collect();
+    front.sort_unstable();
+    front.dedup();
+    front
+}
+
+proptest! {
+    /// The full front of disjoint pairs, and the maximally disjoint
+    /// trade-off of cost against shared edges, match pair enumeration.
+    #[test]
+    fn pair_fronts_match_enumeration(p in small(), t in 0..7_usize) {
+        let graph = &p.graph;
+        if graph.nodes < 2 {
+            return Ok(());
+        }
+
+        let (s, t) = (p.start, (p.start + 1 + t % (graph.nodes - 1)) % graph.nodes);
+        for kind in [Disjointness::Edges, Disjointness::States] {
+            let expected = pareto(&pair_costs(graph, s, t, kind));
+            let front = multiobjective_search::disjoint_pair_front(graph, &s, &t, kind);
+            let costs: Vec<_> = front.iter().map(|(_, c)| *c).collect();
+            prop_assert_eq!(costs, expected);
+            for (pair, c) in &front {
+                check_pair(graph, s, t, pair, kind)?;
+                let (a, b) = (cost(graph, &pair.first_edges), cost(graph, &pair.second_edges));
+                prop_assert_eq!([a[0] + b[0], a[1] + b[1]], *c);
+            }
+        }
+
+        let all = paths(graph, s, &|v| v == t);
+        let mut trades = Vec::new();
+        for (i, (_, ea)) in all.iter().enumerate() {
+            for (_, eb) in &all[i..] {
+                let shared = ea.iter().filter(|e| eb.contains(e)).count();
+                trades.push([cost(graph, ea)[0] + cost(graph, eb)[0], u32::try_from(shared).unwrap()]);
+            }
+        }
+
+        let expected = pareto(&trades);
+        let got = multiobjective_search::maximally_disjoint_pairs(graph, &s, &t, |w: &[u32; 2]| w[0]);
+        let got_costs: Vec<_> = got.iter().map(|(_, c, k)| [*c, u32::try_from(*k).unwrap()]).collect();
+        prop_assert_eq!(got_costs, expected);
+        for (pair, c, _) in &got {
+            prop_assert_eq!(cost(graph, &pair.first_edges)[0] + cost(graph, &pair.second_edges)[0], *c);
+            prop_assert_eq!(pair.first.first(), Some(&s));
+            prop_assert_eq!(pair.second.last(), Some(&t));
+        }
+    }
+}

@@ -6,6 +6,8 @@
 //! Moghanni, Pascoal and Godinho 2022, as surveyed by Craveirinha et al.,
 //! Algorithms 17(6):222, 2024, Section 2.2.3(g).
 
+mod pairs;
+
 use alloc::collections::{BTreeMap, BTreeSet, BinaryHeap};
 use alloc::vec::Vec;
 use core::cmp::{Ordering, Reverse};
@@ -13,6 +15,8 @@ use core::cmp::{Ordering, Reverse};
 use search_core::{Cost, WideMul};
 
 use crate::graph::{EdgeGraph, Graph};
+
+pub use pairs::{SharedPair, disjoint_pair_front, maximally_disjoint_pairs};
 
 /// A disjoint pair with its total cost.
 pub type CostedPair<S, E, C> = (PathPair<S, E>, C);
