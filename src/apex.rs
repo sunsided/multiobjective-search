@@ -5,32 +5,41 @@
 //!
 //! An *apex-path pair* at a state is an apex, a cost vector component-wise
 //! no worse than every path the pair stands for, and one real
-//! *representative* path to the state. The pair is *bounded* when the
-//! representative is within the tolerances of the apex in every objective:
-//! `c_i(rep) <= (1 + ε_i) · apex_i`. Then the representative, extended by
-//! any suffix, is within the tolerances of every path whose cost is at or
-//! above the apex. The search is EMOA* over apexes, with two additions:
+//! *representative* path to the state. The pair is *ε-bounded* when the
+//! representative's `f` is within the tolerances of the apex's `f` in every
+//! objective: `g_i(rep) + h_i <= (1 + ε_i) · (apex_i + h_i)` (the paper's
+//! Contribution 3). With a consistent heuristic, extending both along an
+//! edge keeps the pair bounded, and at a goal (`h = 0`) the representative
+//! is within the tolerances of every path the pair stands for. The search
+//! is NAMOA*dr over apexes (Algorithm 2 of the paper), with three
+//! additions:
 //!
-//! - a new pair merges into an open pair at the same state when one of the
-//!   two representatives is bounded by the merged apex (the component-wise
-//!   minimum), so near-equal paths share one open entry;
-//! - a popped pair is dropped when some solution is within the tolerances
-//!   of its apex `f` in every objective.
+//! - a new pair merges into an open pair at the same state when the merged
+//!   pair (component-wise minimum apex, the representative with the
+//!   lexicographically smaller reverse cost) is ε-bounded;
+//! - a goal pair merges into a solution pair the same way;
+//! - a pair is dropped when some solution's representative is within the
+//!   tolerances of its `f` in objectives `1..N`. That solution's apex then
+//!   drops to the component-wise minimum of the two, so that later merges
+//!   of the solution keep covering the dropped pair.
 //!
 //! ```mermaid
 //! graph TD
-//!     pop[Pop min apex f] --> pruned{"apex g dominated by an expanded apex,<br/>or a solution within (1+ε) of apex f?"}
+//!     pop[Pop min apex f] --> pruned{"a solution within (1+ε) of f, or<br/>f dominated by an expanded apex? (objectives 1..N)"}
 //!     pruned -- yes --> pop
-//!     pruned -- no --> close[Archive apex g]
+//!     pruned -- no --> close[Archive apex]
 //!     close --> goal{Goal?}
-//!     goal -- yes --> sol[Add representative as solution] --> pop
+//!     goal -- yes --> sol[Merge into a solution if bounded,<br/>else add as solution] --> pop
 //!     goal -- no --> expand[Extend apex and representative, prune] --> merge[Merge into an open pair<br/>at the state if bounded, else push] --> pop
 //! ```
 //!
-//! Differences from the paper, which keep its guarantee: the representative
-//! of a merged pair is the first of the two (new, then open) that the merged
-//! apex bounds, not a choice by a heuristic score; goal pairs are not merged
-//! with solutions; and a goal predicate replaces the single goal.
+//! Differences from the paper, which keep its guarantee: a goal predicate
+//! replaces the single goal, so solution pairs at different goal states
+//! may merge (they are never extended, and `h = 0` at every goal); the
+//! representative is chosen by the paper's L method rather than its G
+//! (greedy slack) method, because [`Cost`] has no division or cost-by-cost
+//! product to compare the slack ratios exactly; and dominated or duplicate
+//! representatives are dropped from the output.
 
 use alloc::collections::{BTreeMap, BinaryHeap};
 use alloc::vec::Vec;
@@ -61,20 +70,25 @@ use crate::pareto::{Front, TruncatedFront};
 /// - the returned solutions are real paths with their exact costs, mutually
 ///   non-dominated and sorted lexicographically ascending; they need not be
 ///   Pareto-optimal themselves;
+/// - when two pairs merge, the representative is the one whose cost is
+///   lexicographically smaller read from the last objective to the first
+///   (the paper's L method), and the pairs stay apart if that one is not
+///   ε-bounded by the merged apex;
 /// - `eps = [Epsilon::ZERO; N]` returns exactly the cost vectors of
 ///   [`emoa_star`](crate::emoa_star).
 ///
 /// # Why the guarantee holds
 ///
-/// Pop order keeps the first component of apex `f` non-decreasing (a merged
-/// apex is the minimum of two apexes whose first components are both at
-/// least the last popped one), which is all that the truncated dominance
-/// check against expanded apexes needs. Each pruning or merging step covers
-/// a pair relative to its own apex, and apexes only go down along these
-/// steps, so the tolerances never compound: an expanded apex at or below a
-/// pruned one covers it, a merged apex covers both pairs, a solution within
-/// the tolerances of apex `f` covers every completion, and a bounded goal
-/// pair's representative covers its apex.
+/// This is Lemma 4 and Theorem 1 of the paper. Pop order keeps the first
+/// component of `f` non-decreasing (Lemma 1; a merged apex is the minimum
+/// of two apexes whose first components are both at least the last popped
+/// one), which is all that the truncated checks against expanded apexes
+/// and solutions need. Each pruning or merging step covers a pair relative
+/// to its own apex, and apexes only go down along these steps, so the
+/// tolerances never compound: an expanded apex at or below a pruned one
+/// covers it, a merged apex covers both pairs (Lemma 3), a solution whose
+/// apex was lowered to the pruned pair's `f` keeps covering it through
+/// later merges, and a bounded goal pair's representative covers its apex.
 ///
 /// # Examples
 ///
@@ -98,8 +112,9 @@ use crate::pareto::{Front, TruncatedFront};
 /// let eps = [Epsilon::new(1, 10); 3];
 /// let out = apex_star(&Routes, ZeroHeuristic, 0, |s| *s == 1, eps);
 /// let costs: Vec<_> = out.solutions.iter().map(|s| s.cost).collect();
-/// // The merged pair's representative [104, 98, 51] covers [100, 100, 50].
-/// assert_eq!(costs, [[50, 200, 100], [104, 98, 51]]);
+/// // [100, 100, 50] has the lexicographically smaller reverse cost, so it
+/// // represents the pair merged with [104, 98, 51] and covers it.
+/// assert_eq!(costs, [[50, 200, 100], [100, 100, 50]]);
 /// ```
 pub fn apex_star<G, H, C, P, const N: usize>(
     graph: &G,
@@ -189,9 +204,9 @@ struct Search<'a, G: Graph, H, C, P, const N: usize> {
     open: BinaryHeap<Reverse<([C; N], usize)>>,
     /// Per-state bookkeeping. Absent means "not reached yet".
     states: BTreeMap<G::State, StateInfo<C, N>>,
-    /// Path arena indices of the solutions' representatives, in the order
-    /// found.
-    solutions: Vec<usize>,
+    /// The solution pairs. Their apexes only go down, by merges and by
+    /// pruning updates.
+    solutions: Vec<Pair<C, N>>,
     /// Reused successor buffer, empty between expansions.
     successors: Vec<(G::State, [C; N])>,
     /// Effort counters.
@@ -235,22 +250,42 @@ where
         self.info_mut(&state).closed.insert(pair.apex);
 
         if (self.is_goal)(&state) {
-            self.solutions.push(pair.rep);
+            self.insert_solution(pair);
         } else {
             self.expand(pair);
         }
     }
 
     /// Returns `true` if a pair at `state` with apex `apex` and apex
-    /// estimate `f` is covered by an expanded pair there or by a solution.
-    fn is_pruned(&self, state: &G::State, apex: &[C; N], f: &[C; N]) -> bool {
-        self.states
-            .get(state)
-            .is_some_and(|info| info.closed.weakly_dominates(apex))
+    /// estimate `f` is covered by a solution or by an expanded pair there
+    /// (the paper's `is_dominated`, lines 19 to 26).
+    fn is_pruned(&mut self, state: &G::State, apex: &[C; N], f: &[C; N]) -> bool {
+        self.is_covered_by_solution(f)
             || self
-                .solutions
-                .iter()
-                .any(|&r| self.within(&self.paths[r].g, f))
+                .states
+                .get(state)
+                .is_some_and(|info| info.closed.weakly_dominates(apex))
+    }
+
+    /// Returns `true` if some solution's representative is within the
+    /// tolerances of `f` in objectives `1..N`, and lowers that solution's
+    /// apex to the component-wise minimum with `f` (lines 20 to 22).
+    ///
+    /// Objective 0 needs no check: the solution's apex is no larger there
+    /// than `f` (Lemma 1), and its bounded representative is within the
+    /// tolerance of that apex.
+    fn is_covered_by_solution(&mut self, f: &[C; N]) -> bool {
+        let paths = &self.paths;
+        let eps = &self.eps;
+        let Some(solution) = self.solutions.iter_mut().find(|s| {
+            let g = &paths[s.rep].g;
+            (1..N).all(|i| eps[i].within(g[i], f[i]))
+        }) else {
+            return false;
+        };
+
+        solution.apex = core::array::from_fn(|i| solution.apex[i].min(f[i]));
+        true
     }
 
     /// Returns `true` if `cost[i] <= (1 + eps[i]) · bound[i]` for every `i`.
@@ -290,9 +325,23 @@ where
         self.successors = successors;
     }
 
-    /// Merges `pair` into the first open pair at its state for which the
-    /// merged apex bounds one of the two representatives, or pushes it as
-    /// is.
+    /// Merges the goal pair `pair` into the first solution pair it merges
+    /// with, or adds it as a new solution (line 11 and lines 27 to 35).
+    fn insert_solution(&mut self, pair: Pair<C, N>) {
+        let found = self
+            .solutions
+            .iter()
+            .enumerate()
+            .find_map(|(k, &other)| self.merge(pair, other).map(|merged| (k, merged)));
+
+        match found {
+            Some((k, merged)) => self.solutions[k] = merged,
+            None => self.solutions.push(pair),
+        }
+    }
+
+    /// Merges `pair` into the first open pair at its state that it merges
+    /// with, or pushes it as is (line 17 and lines 27 to 35).
     fn insert(&mut self, pair: Pair<C, N>) {
         let state = self.paths[pair.rep].state.clone();
         let open = self
@@ -315,20 +364,37 @@ where
     }
 
     /// The pair with the component-wise minimum apex of `a` and `b` and the
-    /// first of their representatives (`a`'s, then `b`'s) that this apex
-    /// bounds; `None` if it bounds neither.
+    /// representative chosen by the paper's L method, or `None` if that
+    /// pair is not ε-bounded.
+    ///
+    /// The L method takes the representative whose cost is lexicographically
+    /// smaller read from the last objective to the first (`a`'s on a tie)
+    /// and does not fall back to the other one. `a` and `b` share `h`: they
+    /// are at the same state, or both at goals, where `h` is zero.
     fn merge(&self, a: Pair<C, N>, b: Pair<C, N>) -> Option<Pair<C, N>> {
         let apex = core::array::from_fn(|i| a.apex[i].min(b.apex[i]));
-        let rep = [a.rep, b.rep]
-            .into_iter()
-            .find(|&rep| self.within(&self.paths[rep].g, &apex))?;
+        let (ga, gb) = (&self.paths[a.rep].g, &self.paths[b.rep].g);
+        let rep = if gb.iter().rev().lt(ga.iter().rev()) {
+            b.rep
+        } else {
+            a.rep
+        };
 
-        Some(Pair {
+        let merged = Pair {
             apex,
             rep,
             h: a.h,
             alive: true,
-        })
+        };
+
+        self.is_bounded(&merged).then_some(merged)
+    }
+
+    /// Returns `true` if the representative's `f` is within the tolerances
+    /// of the apex's `f` in every objective.
+    fn is_bounded(&self, pair: &Pair<C, N>) -> bool {
+        let f_rep = add(self.paths[pair.rep].g, pair.h);
+        self.within(&f_rep, &add(pair.apex, pair.h))
     }
 
     /// Adds a pair to the pair arena, the open list and its state's open
@@ -365,7 +431,7 @@ where
         let mut reps: Vec<_> = self
             .solutions
             .iter()
-            .map(|&r| (self.paths[r].g, r))
+            .map(|s| (self.paths[s.rep].g, s.rep))
             .collect();
         reps.sort_unstable();
 
