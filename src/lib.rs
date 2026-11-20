@@ -12,6 +12,7 @@
 //! | [`boa_star`] | 2 | consistent | Fastest unidirectional choice for two objectives. |
 //! | [`boa_star_approx`] | 2 | consistent | BOA* with an additive tolerance on the second objective. |
 //! | [`boa_star_eps`] | 2 | consistent | BOA*ε: BOA* with a factor `1 + ε` on the second objective. |
+//! | [`boa_star_anytime`] | 2 | consistent | A-BOA*ε: anytime, ever better approximations down to the exact front; `_ws` adds weighted-sum pruning, `_basic` is the no-reuse baseline. |
 //! | [`pp_a_star`] | 2 | consistent | PP-A*: path pairs, factors `1 + ε1` and `1 + ε2` on both objectives. |
 //! | [`apex_star`] | any `N` | consistent | A*pex: apex-path pairs, a factor `1 + ε_i` per objective. |
 //! | [`boba_star`] | 2 | computed internally | Bidirectional; needs a [`ReverseGraph`] and a single goal. |
@@ -63,6 +64,7 @@ extern crate alloc;
 #[cfg(feature = "std")]
 extern crate std;
 
+mod anytime_boa;
 mod apex;
 mod boa;
 mod boba;
@@ -80,6 +82,10 @@ mod pareto;
 mod pp_a;
 mod reference;
 
+pub use anytime_boa::{
+    AnytimeFront, ApproxFactor, WeightedSum, boa_star_anytime, boa_star_anytime_basic,
+    boa_star_anytime_ws,
+};
 pub use apex::{MergeRule, apex_star, apex_star_with};
 pub use boa::{boa_star, boa_star_approx, boa_star_eps};
 pub use boba::{boba_star, boba_star_with};

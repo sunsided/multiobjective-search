@@ -217,6 +217,9 @@ for sol in &out.solutions {
   Wolff, A. Felner, O. Salzman. "Bridging Multi-Valued Heuristics and
   Dimensionality Reduction in Multi-Objective Search." arXiv 2606.20644,
   2026. Its Algorithm 1 also restates NAMOA*dr, used as a second source.
+- **A-BOA\*ε:** "Anytime Approximate Bi-Objective Search" (anonymous
+  preprint, crl.cs.technion.ac.il). Checked against its Algorithms 1 to 3
+  and Section 5; see the table below.
 - **EMOA\*:** Z. Ren, R. Zhan, S. Rathinam, M. Likhachev, H. Choset.
   "Enhanced Multi-Objective A* Using Balanced Binary Search Trees." SoCS
   2022.
@@ -312,6 +315,31 @@ which restates Pulido 2015. No deviation needed a fix.
 | Global check against `Tr` of solutions | same (`TruncatedFront`) | matches; sound although labels leave the open list out of `f_1` order, because Pareto-optimal solutions are still found in lexicographic order (see `namoa_star_dr_mvh_lazy`) |
 | Single goal | goal predicate | deliberate, as everywhere in the crate |
 | MVH construction by backward A*pex and a Bellman-Ford consistency fix (Section 6) | not implemented; tests use exact Pareto sets (consistent) and weakened ones (admissible), the bench the exact and halved sets of a grid | open |
+
+### A-BOA*ε against the anonymous preprint
+
+`boa_star_anytime` (A-BOA*ε), `boa_star_anytime_ws` (A-BOA*ε-w) and
+`boa_star_anytime_basic` (Basic-A-BOA*ε) share one engine.
+`tests/it/anytime.rs` checks every reported front against brute force
+for its factor, a strictly falling factor schedule, and the final front
+against BOA*, with and without an expansion budget; dropping the kept
+paths or weakening the weighted-sum test fails it.
+
+| Paper rule | Here | Status |
+|---|---|---|
+| Seed `π_tl`, `π_br`: lexicographic optima `(c1, c2)` and `(c2, c1)` (Alg. 2, lines 1 and 2) | lexicographic A* with the given heuristic, counted in the stats | matches; equal costs give a one-solution front at once |
+| `ILIST` of intervals, refine `argmax ε̂(I)` with `ε̂(I)/d` until all `ε̂ = 0` (lines 5 to 8) | same; ties go to the leftmost interval | matches |
+| `ε̂(I) = max_π min(DF(π_tl, π), DF(π_br, π))` on `f` (Definition 2) | `ApproxFactor`, exact ratios of costs compared with `WideMul` | matches; real `ε` replaced by exact rationals |
+| Alg. 3: `OPEN ← Π`, `g2_min` reset per call, `π_tmp ← π_tl` | same | matches |
+| `is_dominated`: `f1 ≥ f1(π_br) ∨ f2 ≥ f2(π_tl) ∨` weighted-sum test, then BOA*ε's test, keeping paths pruned only by the tolerance in `Π_tmp` (lines 20 to 27) | same | matches |
+| A solution closes the interval `⟨π_tmp, π, Π_tmp⟩` (lines 9 to 12); the rest goes to `⟨π_tmp, π_br, Π_tmp⟩` (line 18) | same | matches |
+| Weighted sum: prune when `g1 + w g2 + h_w ≥ f1(π_br) + w f2(π_tmp)` (Section 5) | same, integer `w`; off when the right side saturates | matches |
+| Basic-A-BOA*ε: rerun BOA*ε from scratch with `ε / d` until no kept path can matter | the same engine restarted over the whole front each iteration | matches |
+| `d` real, `ε` real | `d: u32 >= 2`; `ε / d` multiplies the denominator; a saturated denominator gives `ε = 0` | deliberate: exact arithmetic; the zero fallback avoids stalling at the smallest ratio |
+| `DF` with a zero `f` component | `ApproxFactor::Infinite`; an infinite interval is refined with `ε = 1` | deliberate: `∞ / d` would never shrink; any finite `ε` keeps Theorem 1 and lets Theorem 2's argument apply |
+| Anytime: solutions can be read off `ILIST` at any time | `on_front` after seeding and whenever the overall factor falls; `Budget<Stats>` stops the search, folding the unexplored open paths into the current interval so the reported factor stays a valid bound | deliberate, follows `heuristic-search`'s anytime callbacks |
+| Single goal | goal predicate; one `g2_min` over all goals | deliberate, as everywhere in the crate |
+| Iterative-PP-A* baseline | not implemented | open: a loop over `pp_a_star` |
 
 ## Testing strategy
 

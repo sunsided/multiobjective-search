@@ -7,9 +7,10 @@ use std::hint::black_box;
 use criterion::Criterion;
 use multiobjective_search::{
     Epsilon, Front, Graph, MvHeuristic, ReverseGraph, RoadGraph, SingleValued, TreeFront,
-    ZeroHeuristic, apex_star, boa_star, boa_star_eps, boba_star, emoa_star, emoa_star_tree,
-    heuristic_fn, mv_heuristic_fn, namoa_star, namoa_star_dr, namoa_star_dr_mvh,
-    namoa_star_dr_mvh_lazy, pp_a_star,
+    WeightedSum, ZeroHeuristic, apex_star, boa_star, boa_star_anytime, boa_star_anytime_basic,
+    boa_star_anytime_ws, boa_star_eps, boba_star, emoa_star, emoa_star_tree, heuristic_fn,
+    mv_heuristic_fn, namoa_star, namoa_star_dr, namoa_star_dr_mvh, namoa_star_dr_mvh_lazy,
+    pp_a_star,
 };
 
 /// Runs every benchmark in this file with criterion's command-line flags.
@@ -17,6 +18,7 @@ fn main() {
     let mut criterion = Criterion::default().configure_from_args();
 
     bench_two_objectives(&mut criterion);
+    bench_anytime(&mut criterion);
     bench_road(&mut criterion);
     bench_three_objectives(&mut criterion);
     bench_four_objectives(&mut criterion);
@@ -162,6 +164,93 @@ fn bench_four_objectives(c: &mut Criterion) {
     });
     group.bench_function("emoa_star_tree", |b| {
         b.iter(|| emoa_star_tree(&grid, ZeroHeuristic, black_box(0), is_goal));
+    });
+    group.finish();
+}
+
+/// Single-objective Dijkstra distances from `goal` on a grid (its own
+/// reverse) under the scalar edge cost `cost`.
+fn distances(grid: &Grid<2>, goal: u32, cost: impl Fn([u32; 2]) -> u32) -> Vec<u32> {
+    let mut dist = vec![u32::MAX; (grid.side * grid.side) as usize];
+    let mut heap = std::collections::BinaryHeap::from([std::cmp::Reverse((0, goal))]);
+    let mut edges = Vec::new();
+
+    while let Some(std::cmp::Reverse((d, s))) = heap.pop() {
+        if d >= dist[s as usize] {
+            continue;
+        }
+
+        dist[s as usize] = d;
+        grid.successors(&s, &mut edges);
+        for (t, w) in edges.drain(..) {
+            heap.push(std::cmp::Reverse((d + cost(w), t)));
+        }
+    }
+
+    dist
+}
+
+/// A-BOA*ε and its variants to the exact front, against BOA*, on a
+/// two-objective grid with the exact per-objective heuristic (as in the
+/// paper), `d = 4` and `w = 1`.
+fn bench_anytime(c: &mut Criterion) {
+    let grid = Grid::<2> { side: 24 };
+    let goal = grid.goal();
+    let is_goal = |s: &u32| *s == goal;
+    let (h1, h2) = (
+        distances(&grid, goal, |w| w[0]),
+        distances(&grid, goal, |w| w[1]),
+    );
+    let sum = distances(&grid, goal, |w| w[0] + w[1]);
+    let h = |s: &u32| Some([h1[*s as usize], h2[*s as usize]]);
+    let mut group = c.benchmark_group("grid_24x24_2obj_anytime");
+
+    group.bench_function("boa_star", |b| {
+        b.iter(|| boa_star(&grid, heuristic_fn(h), black_box(0), is_goal));
+    });
+    group.bench_function("a_boa_star_eps", |b| {
+        b.iter(|| {
+            boa_star_anytime(
+                &grid,
+                heuristic_fn(h),
+                black_box(0),
+                is_goal,
+                4,
+                |_, _| {},
+                |_: &_| false,
+            )
+        });
+    });
+    group.bench_function("a_boa_star_eps_w", |b| {
+        b.iter(|| {
+            let weighted = WeightedSum {
+                weight: 1,
+                heuristic: heuristic_fn(|s: &u32| Some(sum[*s as usize])),
+            };
+            boa_star_anytime_ws(
+                &grid,
+                heuristic_fn(h),
+                black_box(0),
+                is_goal,
+                4,
+                weighted,
+                |_, _| {},
+                |_: &_| false,
+            )
+        });
+    });
+    group.bench_function("basic_a_boa_star_eps", |b| {
+        b.iter(|| {
+            boa_star_anytime_basic(
+                &grid,
+                heuristic_fn(h),
+                black_box(0),
+                is_goal,
+                4,
+                |_, _| {},
+                |_: &_| false,
+            )
+        });
     });
     group.finish();
 }

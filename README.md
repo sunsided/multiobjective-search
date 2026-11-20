@@ -11,6 +11,10 @@ reference on random graphs with two to four objectives:
 - [x] BOA\* with an additive tolerance on the second objective (`boa_star_approx`)
 - [x] BOA\*ε: BOA* with a multiplicative tolerance `1 + ε` on the second
       objective (`boa_star_eps`), rational `ε = num / den` (`Epsilon`)
+- [x] A-BOA\*ε: anytime approximate bi-objective search (`boa_star_anytime`),
+      with weighted-sum pruning (`boa_star_anytime_ws`) and the no-reuse
+      baseline (`boa_star_anytime_basic`); reports each improved front and its
+      exact factor (`ApproxFactor`) to a callback and stops on a budget
 - [x] PP-A\*: path pairs, tolerances on both objectives (`pp_a_star`); one-sided
       bounded test and `br` returned, so the tolerances never compound
 - [x] A\*pex: approximate search for any number of objectives over
