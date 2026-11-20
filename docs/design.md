@@ -20,14 +20,20 @@ In scope:
 - NAMOA*dr (NAMOA* with dimensionality reduction, Pulido et al. 2015).
 - `boa_star_approx`: BOA* with an additive tolerance on the second
   objective (cheap, one changed comparison).
+- `boa_star_eps` (BOA*ε) and `pp_a_star` (PP-A*, Goldin and Salzman 2021):
+  multiplicative tolerances `1 + ε` with a rational `Epsilon = num / den`,
+  tested as `den · x <= (den + num) · y` through `Cost::saturating_times`.
+  A saturated product falls back to the exact test, which only weakens the
+  pruning. PP-A* deviates from the paper in two ways that keep the
+  guarantee: its bounded test is one-sided (first objective) and it returns
+  the `br` path, so the second tolerance is spent only by the solution
+  pruning and approximations never compound; and a goal predicate replaces
+  the single goal.
 - `brute_force`: an exhaustive public reference for tests.
 
 Out of scope:
 
-- Multiplicative approximate or anytime variants (A*pex, BOA*ε, PP-A*).
-  They need a rational factor on costs; `Cost` only has the saturating
-  integer scaling `saturating_times`. They may come later behind their own
-  entry points.
+- Anytime variants and A*pex.
 - Constrained shortest paths (resource-constrained, budgeted). Different
   problem, different output.
 - Any planning-specific model. The crate depends only on `search-core`,
@@ -276,8 +282,6 @@ None for milestone 1. Later:
   heuristics and BOBA*?
 - Should the crate guard against negative costs (an `Unsigned` marker
   trait) instead of documenting the precondition?
-- Should `Cost` gain multiplication (or a scaling trait) so that a
-  multiplicative `(1 + ε)` approximation fits? Draft: no, additive only.
 - Should BOBA* accept user heuristics, or bounded Dijkstra as in the
   paper? Draft: full Dijkstra, computed internally.
 - Should `brute_force` stay public or move to the tests? Draft: public.

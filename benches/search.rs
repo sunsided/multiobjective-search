@@ -5,8 +5,8 @@ use std::hint::black_box;
 
 use criterion::Criterion;
 use multiobjective_search::{
-    Front, Graph, ReverseGraph, TreeFront, ZeroHeuristic, boa_star, boba_star, emoa_star,
-    emoa_star_tree, namoa_star, namoa_star_dr,
+    Epsilon, Front, Graph, ReverseGraph, TreeFront, ZeroHeuristic, boa_star, boa_star_eps,
+    boba_star, emoa_star, emoa_star_tree, namoa_star, namoa_star_dr, pp_a_star,
 };
 
 /// Runs every benchmark in this file with criterion's command-line flags.
@@ -94,6 +94,14 @@ fn bench_two_objectives(c: &mut Criterion) {
 
     group.bench_function("boa_star", |b| {
         b.iter(|| boa_star(&grid, ZeroHeuristic, black_box(0), is_goal));
+    });
+    group.bench_function("boa_star_eps_10pct", |b| {
+        let eps = Epsilon::new(1, 10);
+        b.iter(|| boa_star_eps(&grid, ZeroHeuristic, black_box(0), is_goal, eps));
+    });
+    group.bench_function("pp_a_star_10pct", |b| {
+        let eps = [Epsilon::new(1, 10); 2];
+        b.iter(|| pp_a_star(&grid, ZeroHeuristic, black_box(0), is_goal, eps));
     });
     group.bench_function("boba_star", |b| {
         b.iter(|| boba_star(&grid, black_box(0), goal));

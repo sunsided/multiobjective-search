@@ -27,6 +27,7 @@ use core::mem;
 use search_core::{Cost, Heuristic};
 
 use crate::cost::add;
+use crate::epsilon::Epsilon;
 use crate::graph::Graph;
 use crate::output::{Output, Solution, Stats};
 
@@ -80,7 +81,7 @@ where
     C: Cost,
     P: Fn(&G::State) -> bool,
 {
-    boa_star_approx(graph, heuristic, start, is_goal, C::ZERO)
+    run(graph, heuristic, start, is_goal, Tolerance::EXACT)
 }
 
 /// [`boa_star`] with an additive tolerance `slack` on the second
@@ -99,12 +100,9 @@ where
 /// of the last solution, so larger tolerances expand fewer labels. The
 /// first objective is never relaxed.
 ///
-/// This is an additive simplification of the multiplicative BOA*ε and
-/// PP-A* (Goldin and Salzman, "Approximate bi-criteria search by efficient
-/// representation of subsets of the Pareto-optimal frontier", ICAPS 2021),
-/// which relax both objectives by a factor `1 + ε`. [`Cost`] only scales by
-/// integer factors (`saturating_times`), so a rational factor is left to a
-/// separate entry point.
+/// This is an additive variant of the multiplicative
+/// [`boa_star_eps`] (BOA*ε); [`pp_a_star`](crate::pp_a_star) also relaxes the
+/// first objective.
 ///
 /// `f2 + slack` must not overflow `C`: a slack near `C::MAX` panics in
 /// debug builds and wraps in release builds.
@@ -145,11 +143,120 @@ where
     C: Cost,
     P: Fn(&G::State) -> bool,
 {
-    let mut search = Search::new(graph, heuristic, is_goal, slack);
+    run(graph, heuristic, start, is_goal, Tolerance::Additive(slack))
+}
+
+/// BOA*ε: [`boa_star`] with a multiplicative tolerance `1 + eps` on the
+/// second objective.
+///
+/// Guarantees, under the requirements of [`boa_star`]:
+///
+/// - every returned solution is Pareto-optimal, and they are sorted as in
+///   [`boa_star`];
+/// - for every Pareto-optimal cost vector `s` some returned solution `r`
+///   has `r[0] <= s[0]` and `r[1] <= (1 + eps) · s[1]`.
+///
+/// As in Goldin and Salzman's BOA*ε (ICAPS 2021, eq. 2), the only change to
+/// [`boa_star`] is the pruning by solutions: a label is dropped once
+/// `(1 + eps) · f2` reaches the second cost of the last solution. The
+/// per-state pruning stays exact, so the first objective is never relaxed;
+/// [`pp_a_star`](crate::pp_a_star) relaxes both. `eps` = [`Epsilon::ZERO`]
+/// is exactly [`boa_star`].
+///
+/// # Why the guarantee holds
+///
+/// Labels leave the open list in lexicographic `f` order, so a solution
+/// `r` found before a label `x` has `r[0] <= f1(x)`. A label dropped because
+/// `r[1] <= (1 + eps) · f2(x)` only leads to solutions `s >= f(x)`, which
+/// `r` covers. A label dropped by the exact per-state test is dominated by
+/// an expanded label at the same state, whose completions dominate its own.
+/// A returned solution `r'` passed the test against every earlier `r`, so
+/// `(1 + eps) · r'[1] < r[1]`; a pruned path `s` with `r[1] <= (1 + eps) ·
+/// s[1]` then has `s[1] > r'[1]` and cannot dominate `r'`.
+///
+/// # Examples
+///
+/// ```
+/// use multiobjective_search::{Epsilon, Graph, ZeroHeuristic, boa_star_eps};
+///
+/// /// Three routes from 0 to 1.
+/// struct Routes;
+///
+/// impl Graph for Routes {
+///     type State = u8;
+///     type Weight = [u32; 2];
+///
+///     fn successors(&self, state: &u8, out: &mut Vec<(u8, [u32; 2])>) {
+///         if *state == 0 {
+///             out.extend([(1, [1, 110]), (1, [2, 100]), (1, [3, 50])]);
+///         }
+///     }
+/// }
+///
+/// let out = boa_star_eps(&Routes, ZeroHeuristic, 0, |s| *s == 1, Epsilon::new(1, 10));
+/// let costs: Vec<_> = out.solutions.iter().map(|s| s.cost).collect();
+/// assert_eq!(costs, [[1, 110], [3, 50]]); // 110 <= 1.1 * 100
+/// ```
+pub fn boa_star_eps<G, H, C, P>(
+    graph: &G,
+    heuristic: H,
+    start: G::State,
+    is_goal: P,
+    eps: Epsilon,
+) -> Output<G::State, [C; 2]>
+where
+    G: Graph<Weight = [C; 2]>,
+    H: Heuristic<G::State, [C; 2]>,
+    C: Cost,
+    P: Fn(&G::State) -> bool,
+{
+    run(graph, heuristic, start, is_goal, Tolerance::Relative(eps))
+}
+
+/// Runs one unidirectional BOA* search with the given solution-pruning
+/// tolerance.
+fn run<G, H, C, P>(
+    graph: &G,
+    heuristic: H,
+    start: G::State,
+    is_goal: P,
+    tolerance: Tolerance<C>,
+) -> Output<G::State, [C; 2]>
+where
+    G: Graph<Weight = [C; 2]>,
+    H: Heuristic<G::State, [C; 2]>,
+    C: Cost,
+    P: Fn(&G::State) -> bool,
+{
+    let mut search = Search::new(graph, heuristic, is_goal, tolerance);
     search.push_start(start);
     while search.step() {}
 
     search.into_output()
+}
+
+/// How much worse in the second objective a pruned label may be than the
+/// last solution that prunes it.
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum Tolerance<C> {
+    /// Prune when `f2 + slack >= best`.
+    Additive(C),
+    /// Prune when `best <= (1 + ε) · f2`.
+    Relative(Epsilon),
+}
+
+impl<C: Cost> Tolerance<C> {
+    /// No tolerance: exact BOA* pruning, `f2 >= best`.
+    pub(crate) const EXACT: Self = Self::Additive(C::ZERO);
+
+    /// Returns `true` if a solution with second cost `best` covers every
+    /// completion of a label with second estimate `f2`.
+    fn covers(self, best: C, f2: C) -> bool {
+        match self {
+            Self::Additive(slack) => f2 + slack >= best,
+            Self::Relative(eps) => eps.within(best, f2),
+        }
+    }
 }
 
 /// A search label: one path to a state, stored in the node arena.
@@ -173,9 +280,9 @@ pub(crate) struct Search<'a, G: Graph, H, C, P> {
     heuristic: H,
     /// Goal test.
     is_goal: P,
-    /// Additive tolerance on the second objective when pruning by
-    /// solutions. Zero for exact search.
-    slack: C,
+    /// Tolerance on the second objective when pruning by solutions.
+    /// Additive zero for exact search.
+    tolerance: Tolerance<C>,
     /// Labels with `f1` at or above this bound are pruned, and the search
     /// stops once the open list reaches it. `None` (no bound) except in
     /// BOBA*, where it is the first cost of the other direction's last
@@ -208,12 +315,12 @@ where
     P: Fn(&G::State) -> bool,
 {
     /// Creates an empty search with no labels.
-    pub(crate) fn new(graph: &'a G, heuristic: H, is_goal: P, slack: C) -> Self {
+    pub(crate) fn new(graph: &'a G, heuristic: H, is_goal: P, tolerance: Tolerance<C>) -> Self {
         Self {
             graph,
             heuristic,
             is_goal,
-            slack,
+            tolerance,
             primary_bound: None,
             nodes: Vec::new(),
             open: BinaryHeap::new(),
@@ -317,13 +424,12 @@ where
 
     /// Returns `true` if a label at `state` with second cost `g2` and
     /// estimate `f` is weakly dominated by an expanded label or by a
-    /// solution (within the slack), or is beyond the primary bound.
+    /// solution (within the tolerance), or is beyond the primary bound.
     fn is_dominated(&self, state: &G::State, g2: C, f: [C; 2]) -> bool {
         self.g2_min.get(state).is_some_and(|&min| g2 >= min)
             || self
                 .best_goal_g2
-                // shortcut: additive slack only; a rational (1 + eps) could use Cost::saturating_times.
-                .is_some_and(|best| f[1] + self.slack >= best)
+                .is_some_and(|best| self.tolerance.covers(best, f[1]))
             || self.primary_bound.is_some_and(|bound| f[0] >= bound)
     }
 

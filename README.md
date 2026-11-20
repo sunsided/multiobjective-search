@@ -9,6 +9,10 @@ reference on random graphs with two to four objectives:
 
 - [x] BOA\*: bi-objective A* (`boa_star`)
 - [x] BOA\* with an additive tolerance on the second objective (`boa_star_approx`)
+- [x] BOA\*ε: BOA* with a multiplicative tolerance `1 + ε` on the second
+      objective (`boa_star_eps`), rational `ε = num / den` (`Epsilon`)
+- [x] PP-A\*: path pairs, tolerances on both objectives (`pp_a_star`); one-sided
+      bounded test and `br` returned, so the tolerances never compound
 - [x] BOBA\*: bidirectional bi-objective A* (`boba_star`), without the paper's
       early solution update and heuristic tuning
 - [x] EMOA\*: multi-objective A* with truncated dominance checks (`emoa_star`),
@@ -26,7 +30,6 @@ reference on random graphs with two to four objectives:
 
 Open:
 
-- [ ] Multiplicative `(1 + ε)` approximation (BOA*ε, PP-A*)
 - [ ] DIMACS road-network benchmarks
 
 ## Breaking changes

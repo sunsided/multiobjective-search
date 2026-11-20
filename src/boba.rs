@@ -42,7 +42,7 @@ use alloc::vec::Vec;
 
 use search_core::{Cost, heuristic_fn};
 
-use crate::boa::Search;
+use crate::boa::{Search, Tolerance};
 use crate::graph::{Graph, ReverseGraph};
 use crate::output::{Output, Solution, Stats};
 
@@ -120,8 +120,8 @@ where
     let is_goal = equals(goal.clone());
     let is_start = equals(start.clone());
 
-    let mut forward = Search::new(graph, forward_h, is_goal, C::ZERO);
-    let mut backward = Search::new(&reversed, backward_h, is_start, C::ZERO);
+    let mut forward = Search::new(graph, forward_h, is_goal, Tolerance::EXACT);
+    let mut backward = Search::new(&reversed, backward_h, is_start, Tolerance::EXACT);
     forward.push_start(start);
     backward.push_start(goal);
 
