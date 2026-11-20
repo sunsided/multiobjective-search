@@ -88,7 +88,8 @@ pub enum DimacsErrorKind {
     Malformed,
     /// A node id outside `1..=nodes`.
     NodeOutOfRange(u32),
-    /// The file has a different number of arcs than its problem line says.
+    /// The file has a different number of arcs than its problem line says,
+    /// or the time file a different number than the distance file (line 0).
     ArcCount {
         /// The count on the problem line.
         expected: usize,
@@ -144,8 +145,9 @@ impl RoadGraph {
     /// Returns a [`DimacsError`] for a malformed or inconsistent file:
     /// a missing or second problem line, a malformed line, a node id out of
     /// range, an arc count that differs from the problem line, or two files
-    /// that differ in node count ([`DimacsErrorKind::NodeCount`], line 0) or
-    /// in an arc's endpoints ([`DimacsErrorKind::ArcMismatch`], at the time
+    /// that differ in node count ([`DimacsErrorKind::NodeCount`], line 0),
+    /// in arc count ([`DimacsErrorKind::ArcCount`], line 0) or in an arc's
+    /// endpoints ([`DimacsErrorKind::ArcMismatch`], at the time
     /// file's line).
     pub fn from_dimacs(distance: &str, time: &str) -> Result<Self, DimacsError> {
         let distance = parse_gr(distance)?;
@@ -157,6 +159,16 @@ impl RoadGraph {
                 kind: DimacsErrorKind::NodeCount {
                     expected: distance.nodes,
                     found: time.nodes,
+                },
+            });
+        }
+
+        if distance.arcs.len() != time.arcs.len() {
+            return Err(DimacsError {
+                line: 0,
+                kind: DimacsErrorKind::ArcCount {
+                    expected: distance.arcs.len(),
+                    found: time.arcs.len(),
                 },
             });
         }
@@ -571,6 +583,17 @@ mod tests {
                 expected: 4,
                 found: 3
             }
+        );
+        let e = kind(DISTANCE, "p sp 3 2\na 1 2 5\na 2 3 5\n");
+        assert_eq!(
+            (e.line, e.kind),
+            (
+                0,
+                DimacsErrorKind::ArcCount {
+                    expected: 3,
+                    found: 2
+                }
+            )
         );
         let e = kind(DISTANCE, "p sp 3 3\na 1 2 5\na 3 2 5\na 1 3 6\n");
         assert_eq!((e.line, e.kind), (3, DimacsErrorKind::ArcMismatch));

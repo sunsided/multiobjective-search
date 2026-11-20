@@ -27,9 +27,11 @@ pub struct Output<S, W> {
     /// One solution per Pareto-optimal cost vector, sorted by cost
     /// lexicographically ascending (for two objectives: first strictly
     /// ascending, second strictly descending). Empty when no goal is
-    /// reachable. The approximate searches ([`boa_star_approx`](crate::boa_star_approx),
-    /// [`boa_star_eps`](crate::boa_star_eps), [`pp_a_star`](crate::pp_a_star)) return a
-    /// covering subset instead.
+    /// reachable. [`boa_star_approx`](crate::boa_star_approx) and
+    /// [`boa_star_eps`](crate::boa_star_eps) return a covering subset of the
+    /// Pareto-optimal solutions instead, and [`pp_a_star`](crate::pp_a_star)
+    /// a covering set of mutually non-dominated solutions that need not be
+    /// Pareto-optimal.
     pub solutions: Vec<Solution<S, W>>,
     /// Search effort counters.
     pub stats: Stats,

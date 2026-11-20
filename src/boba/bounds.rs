@@ -45,7 +45,9 @@ impl<S: Clone + Ord, C: Cost> Bounds<S, C> {
     /// Runs the four preliminary searches. `successors` and `predecessors`
     /// append the outgoing and incoming edges of a state to an empty buffer.
     ///
-    /// Returns `None` if the goal is unreachable from the start.
+    /// Returns `None` if the goal is unreachable from the start (or, for a
+    /// graph whose predecessors do not mirror its successors, the start
+    /// from the goal backwards).
     pub(super) fn new(
         start: &S,
         goal: &S,
@@ -57,9 +59,8 @@ impl<S: Clone + Ord, C: Cost> Bounds<S, C> {
         let mut a = Lex::new(start.clone(), 0);
         let ub2 = a.run_to(goal, &successors, &none)?;
         let mut b = Lex::new(goal.clone(), 1);
-        let ub1 = b
-            .run_to(start, &predecessors, &none)
-            .expect("the start reaches the goal, so the goal is reachable backwards");
+        // `None` only if the predecessors do not mirror the successors.
+        let ub1 = b.run_to(start, &predecessors, &none)?;
 
         a.run_within(ub1, &successors, &none);
         b.run_within(ub2, &predecessors, &none);
