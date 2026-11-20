@@ -296,3 +296,38 @@ proptest! {
         }
     }
 }
+
+/// The vertices of the lower-left convex hull of a sorted 2D Pareto front
+/// (Andrew's monotone chain, collinear points dropped).
+fn hull_vertices(front: &[[u32; 2]]) -> Vec<[u32; 2]> {
+    let cross = |o: [u32; 2], a: [u32; 2], b: [u32; 2]| {
+        let (ox, oy) = (i64::from(o[0]), i64::from(o[1]));
+        (i64::from(a[0]) - ox) * (i64::from(b[1]) - oy)
+            - (i64::from(a[1]) - oy) * (i64::from(b[0]) - ox)
+    };
+    let mut hull: Vec<[u32; 2]> = Vec::new();
+    for &p in front {
+        while hull.len() >= 2 && cross(hull[hull.len() - 2], hull[hull.len() - 1], p) <= 0 {
+            hull.pop();
+        }
+        hull.push(p);
+    }
+    hull
+}
+
+proptest! {
+    /// The two-phase method returns the Pareto front, and its first phase
+    /// exactly the hull vertices.
+    #[test]
+    fn two_phase_matches_brute_force(p in problems::<2>()) {
+        let h = exact_heuristic(&p);
+        let goal = |v: &usize| p.goals[*v];
+        check(&p, &multiobjective_search::two_phase(&p.graph, ZeroHeuristic, p.start, goal))?;
+        check(&p, &multiobjective_search::two_phase(&p.graph, heuristic_fn(|v: &usize| h[*v]), p.start, goal))?;
+
+        let front = pareto_costs(&p);
+        let supported = multiobjective_search::supported_solutions(&p.graph, ZeroHeuristic, p.start, goal);
+        let costs: Vec<_> = supported.solutions.iter().map(|s| s.cost).collect();
+        prop_assert_eq!(costs, hull_vertices(&front));
+    }
+}

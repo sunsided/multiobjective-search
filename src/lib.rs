@@ -28,6 +28,7 @@
 //! | [`minsum_maxmin_multi`] | `N` sums + `M` bottlenecks | consistent on the sums | Several maxmin objectives. |
 //! | [`min_cost_capacity_ratio`], [`quickest_path`] | sum + bottleneck | consistent on the sum | Ratio and quickest-path objectives read off the minsum–maxmin front. |
 //! | [`constrained_shortest_path`] | 2 | consistent | Cheapest path with the second cost within a budget. |
+//! | [`two_phase`] | 2 | consistent | Two-phase method: supported solutions by weighted sums ([`supported_solutions`]), then the rest. |
 //! | [`ranking`] | 2 | consistent | The classic ranking method: loopless paths by first cost. |
 //! | [`brute_force`] | any `N` | none | Exhaustive reference for tests on small graphs. |
 //!
@@ -93,6 +94,7 @@ mod ranking;
 mod reference;
 #[cfg(feature = "parallel")]
 mod sip;
+mod two_phase;
 
 pub use anytime_boa::{
     AnytimeFront, ApproxFactor, WeightedSum, boa_star_anytime, boa_star_anytime_basic,
@@ -124,3 +126,4 @@ pub use reference::brute_force;
 pub use search_core::{Cost, Heuristic, HeuristicFn, heuristic_fn};
 #[cfg(feature = "parallel")]
 pub use sip::{SipConfig, sip_mosp};
+pub use two_phase::{supported_solutions, two_phase};
