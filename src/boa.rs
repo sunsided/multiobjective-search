@@ -78,17 +78,71 @@ where
     C: Cost,
     P: Fn(&G::State) -> bool,
 {
-    let mut search = Search::new(graph, heuristic, is_goal);
+    boa_star_approx(graph, heuristic, start, is_goal, C::default())
+}
+
+/// [`boa_star`] with an additive tolerance `slack` on the second
+/// objective: returns a subset of the Pareto-optimal solutions that covers
+/// every Pareto-optimal cost vector within `slack`.
+///
+/// Guarantees, under the requirements of [`boa_star`]:
+///
+/// - every returned solution is Pareto-optimal, and they are sorted as in
+///   [`boa_star`];
+/// - for every Pareto-optimal cost vector `s` some returned solution `r`
+///   has `r[0] <= s[0]` and `r[1] <= s[1] + slack`.
+///
+/// `slack = 0` is exactly [`boa_star`]. The only change is the pruning by
+/// solutions: a label is dropped once `f2 + slack` reaches the second cost
+/// of the last solution, so larger tolerances expand fewer labels. The
+/// first objective is never relaxed.
+///
+/// This is an additive simplification of the multiplicative BOA*ε
+/// (Goldin and Salzman, `SoCS` 2021), which relaxes both objectives by a
+/// factor `1 + ε`; [`Cost`] has no multiplication, so a factor is not
+/// expressible here.
+///
+/// # Examples
+///
+/// ```
+/// use multiobjective_search::{Graph, ZeroHeuristic, boa_star_approx};
+///
+/// /// Three routes from 0 to 1 whose second costs differ by one each.
+/// struct Routes;
+///
+/// impl Graph for Routes {
+///     type State = u8;
+///     type Weight = [u32; 2];
+///
+///     fn successors(&self, state: &u8, out: &mut Vec<(u8, [u32; 2])>) {
+///         if *state == 0 {
+///             out.extend([(1, [1, 3]), (1, [2, 2]), (1, [3, 1])]);
+///         }
+///     }
+/// }
+///
+/// let out = boa_star_approx(&Routes, &ZeroHeuristic, 0, |s| *s == 1, 1);
+/// let costs: Vec<_> = out.solutions.iter().map(|s| s.cost).collect();
+/// assert_eq!(costs, [[1, 3], [3, 1]]); // [2, 2] is within 1 of [1, 3]
+/// ```
+pub fn boa_star_approx<G, H, C, P>(
+    graph: &G,
+    heuristic: &H,
+    start: G::State,
+    is_goal: P,
+    slack: C,
+) -> Output<G::State, [C; 2]>
+where
+    G: Graph<Weight = [C; 2]>,
+    H: Heuristic<G::State, [C; 2]>,
+    C: Cost,
+    P: Fn(&G::State) -> bool,
+{
+    let mut search = Search::new(graph, heuristic, is_goal, slack);
     search.push_start(start);
+    while search.step() {}
 
-    while let Some(Reverse((f, index))) = search.open.pop() {
-        search.process(f, index);
-    }
-
-    Output {
-        solutions: search.solutions,
-        stats: search.stats,
-    }
+    search.into_output()
 }
 
 /// A search label: one path to a state, stored in the node arena.
@@ -102,13 +156,24 @@ struct Node<S, C> {
 }
 
 /// Mutable state of one BOA* run.
-struct Search<'a, G: Graph, H, C, P> {
+///
+/// Also one direction of BOBA*, which drives two of these step by step and
+/// exchanges their bounds; see [`Search::set_primary_bound`].
+pub(crate) struct Search<'a, G: Graph, H, C, P> {
     /// The graph being searched.
     graph: &'a G,
     /// Per-objective lower bounds on the remaining cost.
     heuristic: &'a H,
     /// Goal test.
     is_goal: P,
+    /// Additive tolerance on the second objective when pruning by
+    /// solutions. Zero for exact search.
+    slack: C,
+    /// Labels with `f1` at or above this bound are pruned, and the search
+    /// stops once the open list reaches it. `None` (no bound) except in
+    /// BOBA*, where it is the first cost of the other direction's last
+    /// solution.
+    primary_bound: Option<C>,
     /// Every generated label; open-list entries and parents index into it.
     nodes: Vec<Node<G::State, C>>,
     /// Open list as a min-heap on `(f, arena index)`, `f` compared
@@ -136,11 +201,13 @@ where
     P: Fn(&G::State) -> bool,
 {
     /// Creates an empty search with no labels.
-    fn new(graph: &'a G, heuristic: &'a H, is_goal: P) -> Self {
+    pub(crate) fn new(graph: &'a G, heuristic: &'a H, is_goal: P, slack: C) -> Self {
         Self {
             graph,
             heuristic,
             is_goal,
+            slack,
+            primary_bound: None,
             nodes: Vec::new(),
             open: BinaryHeap::new(),
             g2_min: BTreeMap::new(),
@@ -151,8 +218,35 @@ where
         }
     }
 
+    /// Processes the next label from the open list.
+    ///
+    /// Returns `false`, without processing anything, once the search is
+    /// done: the open list is empty or its best label has `f1` at or above
+    /// the primary bound.
+    pub(crate) fn step(&mut self) -> bool {
+        let Some(Reverse((f, index))) = self.open.pop() else {
+            return false;
+        };
+
+        if self.primary_bound.is_some_and(|bound| f[0] >= bound) {
+            return false;
+        }
+
+        self.process(f, index);
+
+        true
+    }
+
+    /// Consumes the search and returns its solutions and counters.
+    pub(crate) fn into_output(self) -> Output<G::State, [C; 2]> {
+        Output {
+            solutions: self.solutions,
+            stats: self.stats,
+        }
+    }
+
     /// Pushes the start label, unless the heuristic reports it as a dead end.
-    fn push_start(&mut self, start: G::State) {
+    pub(crate) fn push_start(&mut self, start: G::State) {
         if let Some(h) = self.heuristic.estimate(&start) {
             self.push(start, [C::default(); 2], h, None);
         }
@@ -162,7 +256,7 @@ where
     /// solution, or expand.
     fn process(&mut self, f: [C; 2], index: usize) {
         let node = &self.nodes[index];
-        if self.is_dominated(&node.state, node.g[1], f[1]) {
+        if self.is_dominated(&node.state, node.g[1], f) {
             return;
         }
 
@@ -194,7 +288,7 @@ where
             };
 
             let g_next = add(g, weight);
-            if !self.is_dominated(&state, g_next[1], g_next[1] + h[1]) {
+            if !self.is_dominated(&state, g_next[1], add(g_next, h)) {
                 self.push(state, g_next, h, Some(index));
             }
         }
@@ -202,11 +296,15 @@ where
         self.successors = successors;
     }
 
-    /// Returns `true` if a label at `state` with second costs `g2` and `f2`
-    /// is weakly dominated by an expanded label or by a solution.
-    fn is_dominated(&self, state: &G::State, g2: C, f2: C) -> bool {
+    /// Returns `true` if a label at `state` with second cost `g2` and
+    /// estimate `f` is weakly dominated by an expanded label or by a
+    /// solution (within the slack), or is beyond the primary bound.
+    fn is_dominated(&self, state: &G::State, g2: C, f: [C; 2]) -> bool {
         self.g2_min.get(state).is_some_and(|&min| g2 >= min)
-            || self.best_goal_g2.is_some_and(|best| f2 >= best)
+            || self
+                .best_goal_g2
+                .is_some_and(|best| f[1] + self.slack >= best)
+            || self.primary_bound.is_some_and(|bound| f[0] >= bound)
     }
 
     /// Adds a label to the arena and the open list.

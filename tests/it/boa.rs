@@ -1,10 +1,11 @@
-//! BOA* tests: fixed cases and a property-based cross-check against the
-//! brute-force reference.
+//! BOA* and approximate BOA* tests: fixed cases and property-based
+//! cross-checks against the brute-force reference.
 
-use multiobjective_search::{Heuristic, Output, ZeroHeuristic, boa_star};
+use multiobjective_search::{Heuristic, Output, ZeroHeuristic, boa_star, boa_star_approx};
 use proptest::prelude::*;
 
-use crate::check::check;
+use crate::brute_force::pareto_costs;
+use crate::check::{check, check_paths};
 use crate::fixtures::{EdgeList, Problem, exact_heuristic, problems};
 
 /// Runs BOA* on `problem` with the given heuristic.
@@ -119,5 +120,68 @@ proptest! {
         for pair in out.solutions.windows(2) {
             prop_assert!(pair[0].cost[0] < pair[1].cost[0] && pair[0].cost[1] > pair[1].cost[1]);
         }
+    }
+}
+
+/// Checks the guarantee of [`boa_star_approx`] with `slack`: every
+/// solution is Pareto-optimal and a valid path, the output is a staircase,
+/// and every Pareto-optimal cost is covered within `slack` in the second
+/// objective.
+fn check_approx(problem: &Problem<2>, slack: u32) -> Result<(), TestCaseError> {
+    let h = exact_heuristic(problem);
+    let h = |v: &usize| h[*v];
+    let out = boa_star_approx(
+        &problem.graph,
+        &h,
+        problem.start,
+        |v| problem.goals[*v],
+        slack,
+    );
+    let reference = pareto_costs(problem);
+
+    check_paths(problem, &out)?;
+    for pair in out.solutions.windows(2) {
+        prop_assert!(pair[0].cost[0] < pair[1].cost[0] && pair[0].cost[1] > pair[1].cost[1]);
+    }
+
+    for solution in &out.solutions {
+        prop_assert!(reference.contains(&solution.cost));
+    }
+
+    for s in &reference {
+        let covered = out
+            .solutions
+            .iter()
+            .any(|r| r.cost[0] <= s[0] && r.cost[1] <= s[1] + slack);
+        prop_assert!(covered, "{s:?} not covered within {slack}");
+    }
+
+    Ok(())
+}
+
+/// A tolerance of one drops a solution that is within one of its
+/// predecessor in the second objective, and keeps both extremes.
+#[test]
+fn approx_drops_close_solution() {
+    let edges = [(0, 1, [1, 3]), (0, 1, [2, 2]), (0, 1, [3, 1])];
+    let p = problem(2, &edges, 0, 1);
+    let costs = |slack| -> Vec<_> {
+        boa_star_approx(&p.graph, &ZeroHeuristic, 0, |v| *v == 1, slack)
+            .solutions
+            .into_iter()
+            .map(|s| s.cost)
+            .collect()
+    };
+
+    assert_eq!(costs(0), [[1, 3], [2, 2], [3, 1]]);
+    assert_eq!(costs(1), [[1, 3], [3, 1]]);
+    assert_eq!(costs(2), [[1, 3]]);
+}
+
+proptest! {
+    /// The approximation guarantee holds for small tolerances.
+    #[test]
+    fn approx_covers_front(p in problems::<2>(), slack in 0..=3_u32) {
+        check_approx(&p, slack)?;
     }
 }
