@@ -2,6 +2,8 @@
 
 use alloc::vec::Vec;
 
+use crate::cost::Cost;
+
 /// An implicit graph with vector-valued edge weights.
 ///
 /// Successors are generated on demand, so the graph never needs to be
@@ -49,8 +51,8 @@ impl<S, W, F: Fn(&S) -> Option<W>> Heuristic<S, W> for F {
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct ZeroHeuristic;
 
-impl<S, W: Default> Heuristic<S, W> for ZeroHeuristic {
-    fn estimate(&self, _state: &S) -> Option<W> {
-        Some(W::default())
+impl<S, C: Cost, const N: usize> Heuristic<S, [C; N]> for ZeroHeuristic {
+    fn estimate(&self, _state: &S) -> Option<[C; N]> {
+        Some([C::default(); N])
     }
 }

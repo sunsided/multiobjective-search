@@ -4,7 +4,7 @@
 use multiobjective_search::{Heuristic, Output, ZeroHeuristic, boa_star};
 use proptest::prelude::*;
 
-use crate::brute_force::pareto_costs;
+use crate::check::check;
 use crate::fixtures::{EdgeList, Problem, exact_heuristic, problems};
 
 /// Runs BOA* on `problem` with the given heuristic.
@@ -21,48 +21,6 @@ fn solve<H: Heuristic<usize, [u32; 2]>>(
 fn solve_informed(problem: &Problem<2>) -> Output<usize, [u32; 2]> {
     let h = exact_heuristic(problem);
     solve(problem, &|v: &usize| h[*v])
-}
-
-/// Checks every solution: cost set equals the reference, the order is
-/// strictly increasing in the first objective, and each path is a real
-/// start-to-goal path whose cost matches.
-fn check(problem: &Problem<2>, out: &Output<usize, [u32; 2]>) -> Result<(), TestCaseError> {
-    let costs: Vec<_> = out.solutions.iter().map(|s| s.cost).collect();
-    prop_assert_eq!(&costs, &pareto_costs(problem));
-
-    for pair in costs.windows(2) {
-        prop_assert!(pair[0][0] < pair[1][0] && pair[0][1] > pair[1][1]);
-    }
-
-    for solution in &out.solutions {
-        prop_assert_eq!(solution.path.first(), Some(&problem.start));
-        prop_assert!(problem.goals[*solution.path.last().unwrap()]);
-        prop_assert!(path_costs(&problem.graph, &solution.path).contains(&solution.cost));
-    }
-
-    Ok(())
-}
-
-/// Every cost vector a path can have, over all choices among parallel
-/// edges. Empty if some step has no edge.
-fn path_costs(graph: &EdgeList<2>, path: &[usize]) -> Vec<[u32; 2]> {
-    let mut costs = vec![[0, 0]];
-
-    for step in path.windows(2) {
-        let edges: Vec<_> = graph
-            .edges
-            .iter()
-            .filter(|(from, to, _)| *from == step[0] && *to == step[1])
-            .map(|&(_, _, cost)| cost)
-            .collect();
-
-        costs = costs
-            .iter()
-            .flat_map(|c| edges.iter().map(move |e| [c[0] + e[0], c[1] + e[1]]))
-            .collect();
-    }
-
-    costs
 }
 
 /// Builds a problem with a single goal.
@@ -151,5 +109,15 @@ proptest! {
     #[test]
     fn exact_heuristic_matches_brute_force(p in problems::<2>()) {
         check(&p, &solve_informed(&p))?;
+    }
+
+    /// Two objectives come out strictly increasing in the first and so
+    /// strictly decreasing in the second.
+    #[test]
+    fn output_is_a_staircase(p in problems::<2>()) {
+        let out = solve(&p, &ZeroHeuristic);
+        for pair in out.solutions.windows(2) {
+            prop_assert!(pair[0].cost[0] < pair[1].cost[0] && pair[0].cost[1] > pair[1].cost[1]);
+        }
     }
 }

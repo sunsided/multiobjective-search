@@ -1,8 +1,12 @@
 //! Pareto frontiers of cost vectors.
 
+mod truncated;
+
 use alloc::vec::Vec;
 
 use crate::cost::{Cost, weakly_dominates};
+
+pub(crate) use truncated::TruncatedFront;
 
 /// A Pareto frontier of `N`-objective cost vectors.
 ///

@@ -90,6 +90,21 @@ pub fn exact_heuristic<const N: usize>(problem: &Problem<N>) -> Vec<Option<[u32;
         .collect()
 }
 
+/// An admissible but generally inconsistent heuristic: the exact one with
+/// the estimate zeroed at every node where `zeroed[v]` is set.
+///
+/// `zeroed` must have one entry per node.
+pub fn patchy_heuristic<const N: usize>(
+    problem: &Problem<N>,
+    zeroed: &[bool],
+) -> Vec<Option<[u32; N]>> {
+    exact_heuristic(problem)
+        .into_iter()
+        .zip(zeroed)
+        .map(|(h, &zero)| if zero { h.map(|_| [0; N]) } else { h })
+        .collect()
+}
+
 /// Shortest distance from every node to the goal set in one objective.
 fn backward_distances<const N: usize>(problem: &Problem<N>, objective: usize) -> Vec<Option<u32>> {
     let mut dist: Vec<Option<u32>> = problem

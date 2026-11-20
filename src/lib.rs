@@ -31,12 +31,17 @@ extern crate alloc;
 
 mod boa;
 mod cost;
+mod emoa;
+mod frontier_search;
 mod graph;
+mod namoa;
 mod output;
 mod pareto;
 
 pub use boa::boa_star;
 pub use cost::{Cost, Dominates, add, weakly_dominates};
+pub use emoa::emoa_star;
 pub use graph::{Graph, Heuristic, ZeroHeuristic};
+pub use namoa::{namoa_star, namoa_star_dr};
 pub use output::{Output, Solution, Stats};
 pub use pareto::{BiFront, Front};
