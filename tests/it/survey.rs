@@ -9,7 +9,7 @@ use multiobjective_search::{
 use proptest::prelude::*;
 
 use crate::brute_force::pareto_costs;
-use crate::check::check;
+use crate::check::{check, check_paths};
 use crate::fixtures::{EdgeList, Problem, exact_heuristic, problems};
 
 /// Every simple path from `node` to a goal, as the list of its edge costs.
@@ -329,5 +329,73 @@ proptest! {
         let supported = multiobjective_search::supported_solutions(&p.graph, ZeroHeuristic, p.start, goal);
         let costs: Vec<_> = supported.solutions.iter().map(|s| s.cost).collect();
         prop_assert_eq!(costs, hull_vertices(&front));
+    }
+}
+
+/// The brute-force achievement `max_i w_i (c_i - r_i)` as a signed integer.
+fn achieve<const N: usize>(c: &[u32; N], r: &[u32; N], w: &[u32; N]) -> i64 {
+    (0..N)
+        .map(|i| i64::from(w[i]) * (i64::from(c[i]) - i64::from(r[i])))
+        .max()
+        .unwrap()
+}
+
+/// Checks a reference-point session: the first `split` solutions follow
+/// `(r1, w1)`, the rest `(r2, w2)`, each in (achievement, cost) order over
+/// the not yet proposed Pareto-optimal costs.
+fn check_reference<const N: usize>(
+    problem: &Problem<N>,
+    (r1, w1): ([u32; N], [u32; N]),
+    (r2, w2): ([u32; N], [u32; N]),
+    split: usize,
+) -> Result<(), TestCaseError> {
+    let h = exact_heuristic(problem);
+    let goal = |v: &usize| problem.goals[*v];
+    let mut search = multiobjective_search::ReferencePoint::new(
+        &problem.graph,
+        heuristic_fn(|v: &usize| h[*v]),
+        problem.start,
+        goal,
+        r1,
+        w1,
+    );
+    let mut left = pareto_costs(problem);
+    let mut got = Vec::new();
+
+    for step in 0.. {
+        if step == split {
+            search.aim(r2, w2);
+        }
+
+        let (aim, weight) = if step < split { (r1, w1) } else { (r2, w2) };
+        left.sort_by_key(|c| (achieve(c, &aim, &weight), *c));
+        let Some(solution) = search.next() else { break };
+        prop_assert!(!left.is_empty());
+        prop_assert_eq!(solution.cost, left.remove(0));
+        got.push(solution);
+    }
+
+    prop_assert!(left.is_empty());
+    check_paths(
+        problem,
+        &multiobjective_search::Output {
+            solutions: got,
+            stats: Stats::default(),
+        },
+    )
+}
+
+proptest! {
+    /// Reference-point sessions with a change of aim, two and three
+    /// objectives.
+    #[test]
+    fn reference_point_matches_brute_force(
+        p2 in problems::<2>(), p3 in problems::<3>(),
+        r in prop::array::uniform3(0..12_u32), q in prop::array::uniform3(0..12_u32),
+        w in prop::array::uniform3(1..4_u32), v in prop::array::uniform3(1..4_u32),
+        split in 0..4_usize,
+    ) {
+        check_reference(&p2, ([r[0], r[1]], [w[0], w[1]]), ([q[0], q[1]], [v[0], v[1]]), split)?;
+        check_reference(&p3, (r, w), (q, v), split)?;
     }
 }

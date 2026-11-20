@@ -29,6 +29,7 @@
 //! | [`min_cost_capacity_ratio`], [`quickest_path`] | sum + bottleneck | consistent on the sum | Ratio and quickest-path objectives read off the minsum–maxmin front. |
 //! | [`constrained_shortest_path`] | 2 | consistent | Cheapest path with the second cost within a budget. |
 //! | [`two_phase`] | 2 | consistent | Two-phase method: supported solutions by weighted sums ([`supported_solutions`]), then the rest. |
+//! | [`ReferencePoint`] | any `N` | admissible | Interactive: non-dominated solutions by Chebyshev distance to a movable reference point. |
 //! | [`ranking`] | 2 | consistent | The classic ranking method: loopless paths by first cost. |
 //! | [`brute_force`] | any `N` | none | Exhaustive reference for tests on small graphs. |
 //!
@@ -92,6 +93,7 @@ mod pareto;
 mod pp_a;
 mod ranking;
 mod reference;
+mod reference_point;
 #[cfg(feature = "parallel")]
 mod sip;
 mod two_phase;
@@ -123,6 +125,7 @@ pub use pareto::{BiFront, Front, FrontIndex, IndexedFront, TreeFront};
 pub use pp_a::{pp_a_star, pp_a_star_iterative};
 pub use ranking::ranking;
 pub use reference::brute_force;
+pub use reference_point::{Achievement, ReferencePoint, achievement};
 pub use search_core::{Cost, Heuristic, HeuristicFn, heuristic_fn};
 #[cfg(feature = "parallel")]
 pub use sip::{SipConfig, sip_mosp};

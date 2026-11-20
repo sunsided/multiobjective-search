@@ -397,7 +397,7 @@ problem classes; what the crate lacked when it was read:
 | Quickest path, `sum delay + σ / min capacity` (2.2.3(d)) | **implemented**: `quickest_path` | a scan of the minsum–maxmin front (Pelegrín and Fernández) with exact 256-bit cross-multiplication, for costs up to `u64`; cross-checked |
 | Disjoint and maximally disjoint path pairs, k dissimilar paths (2.2.3) | not implemented | needs edge identities and residual-graph surgery (Suurballe), outside the successor-function model |
 | Labelling-type and label-count objectives, knapsack-type paths (2.2.2, 2.2.3) | not implemented | non-additive, problem-specific |
-| Interactive and reference-point methods (INT class) | not implemented | a decision-maker loop around a solver, not a search; a reference-point pick is post-processing of an `Output` |
+| Interactive and reference-point methods (INT class) | **implemented** as a library API: `ReferencePoint`, an iterator over the non-dominated solutions by weighted Chebyshev achievement `max_i w_i (c_i - r_i)` to a reference point, with `aim` to move the reference or the weights between "next solution" queries | best-first on the achievement of `f`, ties lexicographic so only non-dominated solutions come out; cross-checked against brute force, including a change of aim mid-session; the dialogue itself stays with the caller |
 | Approximation schemes (2.3; Warburton, Tsaggouris and Zaroliagis) | partly covered | the crate's ε-approximate searches (BOA*ε, PP-A*, A*pex, A-BOA*ε) have the same guarantees; FPTAS proper is not implemented |
 | Uncertainty: stochastic, robust, fuzzy costs (2.4) | not implemented | different cost model |
 
