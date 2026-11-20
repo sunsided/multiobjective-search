@@ -104,6 +104,7 @@ impl<C: Cost, const N: usize> Front<C, N> {
         let start = self.points.partition_point(|q| q < &point);
 
         if N <= 2 {
+            // shortcut: Vec splice shifts the tail in O(n); use a balanced tree if profiles show it.
             let dominated = self.points[start..].partition_point(|q| weakly_dominates(&point, q));
             self.points.splice(start..start + dominated, [point]);
         } else {

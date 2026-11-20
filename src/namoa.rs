@@ -12,7 +12,7 @@
 //! no expanded label and no solution weakly dominates it; it removes the
 //! open labels it dominates. Labels are expanded in lexicographic `f`
 //! order. The engine is shared with EMOA*, see
-//! [`frontier_search`](crate::frontier_search).
+//! [`crate::frontier_search`].
 
 use crate::cost::Cost;
 use crate::frontier_search;

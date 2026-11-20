@@ -10,13 +10,15 @@
 //! checked again when popped. That trades a larger open list for cheaper
 //! generation, which pays off when many labels share a state.
 //!
-//! For three objectives the truncated frontiers are two-dimensional and
-//! queried by binary search in `O(log n)`.
+//! The paper stores each truncated frontier in a balanced binary search
+//! tree for any number of objectives, with a one-way `O(log n)` traversal
+//! in its three-objective special case, TOA*. This crate keeps the
+//! frontiers in a sorted `Vec` (see [`Front`](crate::Front)):
 //!
-//! The paper stores them in a balanced binary search tree; this crate uses
-//! a sorted `Vec` (see [`Front`](crate::Front)), whose insertion shifts the
-//! tail in `O(n)` but is cache-friendly. For four or more objectives the
-//! paper and this crate both fall back to a linear scan.
+//! - three objectives: a two-dimensional frontier with `O(log n)` binary
+//!   search queries, as in TOA*, but an `O(n)` tail shift on insertion;
+//! - four or more: a scan of the lexicographic prefix that can dominate,
+//!   where the paper prunes a tree traversal.
 
 use crate::cost::Cost;
 use crate::frontier_search;

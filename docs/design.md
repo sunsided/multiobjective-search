@@ -122,8 +122,10 @@ rebuilt from parent links once a solution is found. The open list stores
   for lexicographic searches with consistent heuristics. Three objectives
   map onto a 2D `Front`; other `N` use a `Front<C, N>` with the first
   component zeroed. EMOA*'s balanced tree is replaced by the sorted `Vec`:
-  same query cost, `O(n)` insertion shift (shortcut; revisit if profiles
-  show insertion dominating).
+  same query cost for three objectives (the paper's TOA* case), `O(n)`
+  insertion shift, and a prefix scan instead of a pruned tree traversal
+  for four or more (shortcut; revisit if profiles show either
+  dominating).
 
 NAMOA*, NAMOA*dr and EMOA* share one private engine
 (`frontier_search`) with two switches: the closed archive (full `Front`
@@ -175,9 +177,10 @@ for sol in &out.solutions {
 - **NAMOA\*dr:** F.-J. Pulido, L. Mandow, J. L. Pérez de la Cruz.
   "Dimensionality reduction in multiobjective shortest path search."
   Computers & Operations Research, 2015.
-- **BOA\*ε (multiplicative, not implemented):** B. Goldin, O. Salzman.
-  "Approximate bi-objective search by efficient dominance checks." SoCS
-  2021.
+- **BOA\*ε and PP-A\* (multiplicative, not implemented):** B. Goldin,
+  O. Salzman. "Approximate bi-criteria search by efficient representation
+  of subsets of the Pareto-optimal frontier." ICAPS 2021 (arXiv
+  2006.10302).
 - **EMOA\*:** Z. Ren, R. Zhan, S. Rathinam, M. Likhachev, H. Choset.
   "Enhanced Multi-Objective A* Using Balanced Binary Search Trees." SoCS
   2022.

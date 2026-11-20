@@ -109,6 +109,7 @@ where
     G: ReverseGraph<Weight = [C; 2]>,
     C: Cost,
 {
+    // shortcut: full one-to-all Dijkstra; the paper's cost-bounded A* explores less.
     let to_goal = dijkstra::Distances::new(&goal, |s, out| graph.predecessors(s, out));
     let from_start = dijkstra::Distances::new(&start, |s, out| graph.successors(s, out));
     let forward_h = |s: &G::State| to_goal.get(s);

@@ -97,10 +97,14 @@ where
 /// of the last solution, so larger tolerances expand fewer labels. The
 /// first objective is never relaxed.
 ///
-/// This is an additive simplification of the multiplicative BOA*ε
-/// (Goldin and Salzman, `SoCS` 2021), which relaxes both objectives by a
-/// factor `1 + ε`; [`Cost`] has no multiplication, so a factor is not
-/// expressible here.
+/// This is an additive simplification of the multiplicative BOA*ε and
+/// PP-A* (Goldin and Salzman, "Approximate bi-criteria search by efficient
+/// representation of subsets of the Pareto-optimal frontier", ICAPS 2021),
+/// which relax both objectives by a factor `1 + ε`. [`Cost`] has no
+/// multiplication, so a factor is not expressible here.
+///
+/// `f2 + slack` must not overflow `C`: a slack near `C::MAX` panics in
+/// debug builds and wraps in release builds.
 ///
 /// # Examples
 ///
@@ -315,6 +319,7 @@ where
         self.g2_min.get(state).is_some_and(|&min| g2 >= min)
             || self
                 .best_goal_g2
+                // shortcut: additive slack only, multiplicative (1 + eps) needs Mul on Cost.
                 .is_some_and(|best| f[1] + self.slack >= best)
             || self.primary_bound.is_some_and(|bound| f[0] >= bound)
     }
