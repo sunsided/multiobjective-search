@@ -1,0 +1,9 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc ac1ded4b9320a1d3532a936a61c91beafeeb5d2313d8070e1c06918fc6bf84cb # shrinks to p = Problem { graph: EdgeList { nodes: 2, edges: [(1, 0, [1, 0, 3]), (1, 0, [1, 1, 1])] }, start: 1, goals: [true, false] }, eps = [Epsilon { num: 0, den: 1 }, Epsilon { num: 0, den: 1 }, Epsilon { num: 2, den: 2 }]
+cc 11008764e202f45931ae94a263a7f2baddedd6a19c3675420eae4f18c9021822 # shrinks to p = Problem { graph: EdgeList { nodes: 2, edges: [(1, 0, [0, 0, 0, 2]), (1, 0, [0, 0, 1, 1])] }, start: 1, goals: [true, false] }, eps = [Epsilon { num: 0, den: 1 }, Epsilon { num: 0, den: 1 }, Epsilon { num: 0, den: 1 }, Epsilon { num: 0, den: 1 }]
+cc bb2dc15ee9d87eea7a73de2700c4c8b3cbea700d1756ac0c9558762b484f81ff # shrinks to p = Problem { graph: EdgeList { nodes: 2, edges: [(1, 0, [2, 2]), (1, 0, [0, 3])] }, start: 1, goals: [true, false] }, eps = [Epsilon { num: 0, den: 1 }, Epsilon { num: 0, den: 1 }]

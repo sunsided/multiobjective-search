@@ -6,7 +6,7 @@ use std::hint::black_box;
 
 use criterion::Criterion;
 use multiobjective_search::{
-    Epsilon, Front, Graph, ReverseGraph, RoadGraph, TreeFront, ZeroHeuristic, boa_star,
+    Epsilon, Front, Graph, ReverseGraph, RoadGraph, TreeFront, ZeroHeuristic, apex_star, boa_star,
     boa_star_eps, boba_star, emoa_star, emoa_star_tree, namoa_star, namoa_star_dr, pp_a_star,
 };
 
@@ -127,6 +127,10 @@ fn bench_three_objectives(c: &mut Criterion) {
     let is_goal = |s: &u32| *s == goal;
     let mut group = c.benchmark_group("grid_8x8_3obj");
 
+    group.bench_function("apex_star_10pct", |b| {
+        let eps = [Epsilon::new(1, 10); 3];
+        b.iter(|| apex_star(&grid, ZeroHeuristic, black_box(0), is_goal, eps));
+    });
     group.bench_function("namoa_star", |b| {
         b.iter(|| namoa_star(&grid, ZeroHeuristic, black_box(0), is_goal));
     });

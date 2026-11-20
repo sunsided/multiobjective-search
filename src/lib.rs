@@ -13,6 +13,7 @@
 //! | [`boa_star_approx`] | 2 | consistent | BOA* with an additive tolerance on the second objective. |
 //! | [`boa_star_eps`] | 2 | consistent | BOA*ε: BOA* with a factor `1 + ε` on the second objective. |
 //! | [`pp_a_star`] | 2 | consistent | PP-A*: path pairs, factors `1 + ε1` and `1 + ε2` on both objectives. |
+//! | [`apex_star`] | any `N` | consistent | A*pex: apex-path pairs, a factor `1 + ε_i` per objective. |
 //! | [`boba_star`] | 2 | computed internally | Bidirectional; needs a [`ReverseGraph`] and a single goal. |
 //! | [`boba_star_with`] | 2 | consistent, both directions | [`boba_star`] with caller-supplied heuristics. |
 //! | [`emoa_star`] | any `N` | consistent | Lazy open list, truncated dominance; `O(log n)` checks for 3 objectives. |
@@ -58,6 +59,7 @@ extern crate alloc;
 #[cfg(feature = "std")]
 extern crate std;
 
+mod apex;
 mod boa;
 mod boba;
 mod cost;
@@ -72,6 +74,7 @@ mod pareto;
 mod pp_a;
 mod reference;
 
+pub use apex::apex_star;
 pub use boa::{boa_star, boa_star_approx, boa_star_eps};
 pub use boba::{boba_star, boba_star_with};
 #[cfg(feature = "parallel")]
