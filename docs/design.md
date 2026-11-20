@@ -224,6 +224,8 @@ for sol in &out.solutions {
   "Asynchronous Parallel Search for Exact Multi-Objective Shortest Paths
   with Versioned Frontier Snapshots and Indexed Dominance Pruning." arXiv
   2609.11944, 2026.
+- **Parallel MOA\*:** S. Ahmadi, N. R. Sturtevant, A. Raith, D. Harabor,
+  M. Jalili. "Parallelizing Multi-objective A* Search." arXiv 2503.10075.
 - **EMOA\*:** Z. Ren, R. Zhan, S. Rathinam, M. Likhachev, H. Choset.
   "Enhanced Multi-Objective A* Using Balanced Binary Search Trees." SoCS
   2022.
@@ -376,6 +378,29 @@ three-objective grid NAMOA*dr takes 2.9 ms and SIP-MOSP 4.1 ms (4 + 4
 workers, blocks) to 7.2 ms (2 + 2); on the 24x24 two-objective grid
 parallel BOBA* takes 5.5 ms and SIP-MOSP 15 to 21 ms. These graphs are
 far smaller than the paper's, where coordination is amortized.
+
+### Parallel MOA* against Ahmadi et al.
+
+`parallel_moa_star` (feature `parallel`); `tests/it/parallel_moa.rs`
+runs every case three times against brute force (two to four
+objectives) and NAMOA* (larger graphs). Moving every solution cost down
+a level regardless of the other threads' progress makes them fail.
+
+| Paper rule | Here | Status |
+|---|---|---|
+| `k` threads, thread `i` a MOA* with objective `i` first in cyclic order (Alg. 2) | same, `std::thread::scope`, `N` threads | matches |
+| Thread search: lexicographic order, lazy checks of `Tr(g)` against `G^Tr_1(s)` and `IsDominatedMD(f)` at pop and generation (Alg. 3) | same (LTMOA*-style order), one `TruncatedFront` per state | matches |
+| `IsDominatedMD`: global scalar bounds, then each truncation level (Alg. 4) | same; levels hold rotated vectors with the truncated components zeroed | matches |
+| `UpdateUpperBound` after each solution: move a level-`λ` vector down when its next objective is at most the latest solution cost of that objective's thread; a level-`k-1` scalar becomes a global bound (Alg. 5) | same; the latest solution is published under the thread's lock together with the solution | matches |
+| Early termination of the thread led by objective `m` once its primary cost reaches the global bound `f_m` | same, `>=` | matches |
+| Stop when the first thread ends; merge by removing duplicates | stop when the first thread ends; merge by a Pareto filter of the union | deliberate: also drops dominated solutions a thread may record after pruning by another thread's information |
+| Shared bounds | one `Mutex` for the bounds, read once per pop into a per-thread copy | deliberate, to keep the lock out of the generation loop |
+| Single goal | goal predicate | deliberate, as everywhere |
+
+Bench (machine under load): 10x10 grid, three objectives, uninformed —
+NAMOA*dr 1.04 ms, parallel MOA* 1.70 ms, SIP-MOSP 2.9 to 4.2 ms; 24x24
+grid, two objectives — parallel BOBA* 2.7 ms, parallel MOA* 3.9 ms,
+SIP-MOSP 8.5 to 11 ms.
 
 ### Gaps against the Craveirinha et al. 2024 survey
 

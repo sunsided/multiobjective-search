@@ -54,6 +54,8 @@ reference on random graphs with two to four objectives:
       path (`fptas_constrained`), and on graphs with edge identities
       (`EdgeGraph`) disjoint pairs (`disjoint_pair`), supported bicriteria
       pairs and dissimilar paths; the coverage table is in `docs/design.md`
+- [x] Parallel MOA\* (`parallel_moa_star`, feature `parallel`): one MOA\* per
+      cyclic objective order with shared multi-level upper bounds (Ahmadi et al.)
 - [x] Brute-force reference over simple paths (`brute_force`)
 - [x] Pareto frontier for any number of objectives, `O(log n)` queries for two
       (`Front`, `BiFront`)

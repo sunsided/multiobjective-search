@@ -516,6 +516,11 @@ fn bench_sip(c: &mut Criterion) {
     group.bench_function("namoa_star_dr", |b| {
         b.iter(|| namoa_star_dr(&grid, ZeroHeuristic, black_box(0), is_goal));
     });
+    group.bench_function("parallel_moa_star", |b| {
+        b.iter(|| {
+            multiobjective_search::parallel_moa_star(&grid, ZeroHeuristic, black_box(0), is_goal)
+        });
+    });
     for (name, config) in configs {
         group.bench_function(name, |b| {
             b.iter(|| sip_mosp(&grid, ZeroHeuristic, black_box(0), is_goal, config));
@@ -530,6 +535,11 @@ fn bench_sip(c: &mut Criterion) {
     group.sample_size(20);
     group.bench_function("boba_star_parallel", |b| {
         b.iter(|| boba_star_parallel(&grid, black_box(0), goal));
+    });
+    group.bench_function("parallel_moa_star", |b| {
+        b.iter(|| {
+            multiobjective_search::parallel_moa_star(&grid, ZeroHeuristic, black_box(0), is_goal)
+        });
     });
     for (name, config) in configs {
         group.bench_function(name, |b| {

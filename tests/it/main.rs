@@ -17,6 +17,8 @@ mod mvh;
 mod namoa;
 #[cfg(feature = "parallel")]
 mod parallel;
+#[cfg(feature = "parallel")]
+mod parallel_moa;
 mod reference;
 #[cfg(feature = "parallel")]
 mod sip;
