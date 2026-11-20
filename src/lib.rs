@@ -19,6 +19,8 @@
 //! | [`emoa_star`] | any `N` | consistent | Lazy open list, truncated dominance; `O(log n)` checks for 3 objectives. |
 //! | [`emoa_star_tree`] | any `N` | consistent | EMOA* with the paper's balanced-tree frontiers. |
 //! | [`namoa_star_dr`] | any `N` | consistent | NAMOA* with dimensionality reduction. |
+//! | [`namoa_star_dr_mvh_lazy`] | any `N` | admissible, multi-valued | L-NAMOA*dr-mvh: NAMOA*dr with a [`MvHeuristic`] and lazy dimensionality reduction. |
+//! | [`namoa_star_dr_mvh`] | any `N` | consistent, multi-valued | NAMOA*dr-mvh: one label per estimate; a baseline, slower than the lazy variant. |
 //! | [`namoa_star`] | any `N` | admissible | Classic baseline; label-setting with [`ZeroHeuristic`]. |
 //! | [`brute_force`] | any `N` | none | Exhaustive reference for tests on small graphs. |
 //!
@@ -30,6 +32,8 @@
 //! - [`Heuristic`], [`heuristic_fn`] and [`ZeroHeuristic`]: per-objective
 //!   lower bounds. The trait comes from `search-core` and takes `&mut self`;
 //!   algorithms take the heuristic by value, so pass `&mut h` to keep it.
+//! - [`MvHeuristic`], [`mv_heuristic_fn`] and [`SingleValued`]: multi-valued
+//!   heuristics, a set of lower bounds per state.
 //! - [`Cost`] (from `search-core`) and [`Dominates`]: scalar costs and
 //!   Pareto dominance.
 //! - [`Output`]: solutions sorted lexicographically by cost, plus counters.
@@ -68,7 +72,9 @@ mod emoa;
 mod epsilon;
 mod frontier_search;
 mod graph;
+mod mvh;
 mod namoa;
+mod namoa_mvh;
 mod output;
 mod pareto;
 mod pp_a;
@@ -84,7 +90,9 @@ pub use dimacs::{DimacsError, DimacsErrorKind, RoadGraph};
 pub use emoa::{emoa_star, emoa_star_tree};
 pub use epsilon::Epsilon;
 pub use graph::{Graph, ReverseGraph, ZeroHeuristic};
+pub use mvh::{MvHeuristic, MvHeuristicFn, SingleValued, mv_heuristic_fn};
 pub use namoa::{namoa_star, namoa_star_dr};
+pub use namoa_mvh::{namoa_star_dr_mvh, namoa_star_dr_mvh_lazy};
 pub use output::{Output, Solution, Stats};
 pub use pareto::{BiFront, Front, TreeFront};
 pub use pp_a::pp_a_star;

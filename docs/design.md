@@ -212,6 +212,10 @@ for sol in &out.solutions {
   Hernández, S. Koenig. "A*pex: Efficient Approximate Multi-Objective
   Search on Graphs." ICAPS 2022. Checked against Algorithm 2 of the
   paper; see the table below.
+- **NAMOA\*dr-mvh and L-NAMOA\*dr-mvh, multi-valued heuristics:** M.
+  Wolff, A. Felner, O. Salzman. "Bridging Multi-Valued Heuristics and
+  Dimensionality Reduction in Multi-Objective Search." arXiv 2606.20644,
+  2026. Its Algorithm 1 also restates NAMOA*dr, used as a second source.
 - **EMOA\*:** Z. Ren, R. Zhan, S. Rathinam, M. Likhachev, H. Choset.
   "Enhanced Multi-Objective A* Using Balanced Binary Search Trees." SoCS
   2022.
@@ -272,6 +276,37 @@ the current code.
 | Single goal state | goal predicate; solution pairs at different goals may merge | deliberate: solution pairs are never extended and `h = 0` at every goal, so the merged representative still covers both apexes |
 | Returns every solution pair's representative (line 18) | drops dominated and duplicate representatives, sorts | deliberate: a dominating representative covers whatever the dropped one covered |
 | Consistent heuristic | documented requirement | matches; the `f`-based bound relies on it to stay bounded under extension |
+
+### NAMOA*dr against two sources
+
+Pulido et al. 2015 itself was not reachable. `namoa_star_dr` is checked
+against Pulido's thesis (Tables 4.4 and 4.5, Definition 4.5, eq. 4.9)
+and against Algorithm 1 of Wolff, Felner, Salzman (arXiv 2606.20644),
+which restates Pulido 2015. No deviation needed a fix.
+
+| Rule | Source | Here | Status |
+|---|---|---|---|
+| Pop the lexicographically smallest `f` | thesis; Wolff Alg. 1 line 8 | min-heap on `(f, index)` | matches |
+| At selection, discard if `G_cl^Tr(s)` weakly dominates `Tr(g)` | thesis (`t`-discard); Wolff line 9 | `TruncatedFront` per state | matches; Wolff writes `⪯`, the thesis's `t`-discard is strict on a first-objective tie, which only differs for duplicate vectors (row "NAMOA*dr" above) |
+| At selection, discard if `G_cl^Tr(s_goal)` weakly dominates `Tr(f)` | thesis; Wolff line 11 | `TruncatedFront` of solution costs | matches; a goal predicate replaces `s_goal`, all goals share one archive |
+| Add `Tr(g)` to `G_cl^Tr(s)` before the goal test; a goal label becomes a solution and is not expanded | thesis; Wolff lines 13 to 16 | same | matches |
+| At generation, the same two checks on the child (`Tr(g')`, `Tr(f')`) | thesis; Wolff lines 21 and 23 | same, in `admits` | matches |
+| No open frontier: only closed sets and solutions | Wolff Alg. 1 | per-state open frontier, full dominance, dominated open labels dropped (shared with NAMOA*) | deliberate: extra pruning, sound because a label weakly dominated by an open label at its state reaches nothing that label does not |
+| Consistent heuristic | thesis; Wolff Property 1 | documented requirement | matches |
+
+### Multi-valued heuristics against Wolff et al. 2026
+
+| Paper rule | Here | Status |
+|---|---|---|
+| MVH: a set of non-dominated vectors per state; admissible and consistent as in Section 2.1 | `MvHeuristic`, sets need not be non-dominated (the lazy search sorts and dedups, the eager one tolerates redundancy); `SingleValued` wraps a `Heuristic` | matches |
+| Naive DR with an MVH is unsound (Lemma 1, Figure 2, Tables 1 and 2) | unit test `naive_dimensionality_reduction_loses_a_solution` runs the lazy search with the order check off and loses `(16, 12)`; `tests/it/mvh.rs` runs the same graph through both searches and NAMOA* | matches |
+| NAMOA*dr-mvh: one node per `(g, h)`, successors only for `h ⪯ c + h'` (Definition 1), closed sets per `(s, h)` (Theorem 1) | NAMOA*dr's engine on the graph of `(state, estimate)` pairs, whose single-valued heuristic is consistent by construction; a virtual root fans out to one label per start estimate | matches; the engine's open frontier is per pair |
+| L-NAMOA*dr-mvh: one node per path, `ChooseH` binds the lexicographically smallest estimate not discarded by solutions (lines 26, 34 to 40) | same | matches |
+| Lazy re-evaluation of a popped label whose `f` became dominated (lines 9 to 15) | re-bound and pushed again under the same arena index | matches |
+| `LocalDomCheck`: truncated check, trusted only if `max g'_1 ≤ g_1`, else full check against `G_cl(s)` (lines 41 to 47) | same; the maximum is over every `g_1` ever closed at the state | deliberate: can only fall back more often |
+| Global check against `Tr` of solutions | same (`TruncatedFront`) | matches; sound although labels leave the open list out of `f_1` order, because Pareto-optimal solutions are still found in lexicographic order (see `namoa_star_dr_mvh_lazy`) |
+| Single goal | goal predicate | deliberate, as everywhere in the crate |
+| MVH construction by backward A*pex and a Bellman-Ford consistency fix (Section 6) | not implemented; tests use exact Pareto sets (consistent) and weakened ones (admissible), the bench the exact and halved sets of a grid | open |
 
 ## Testing strategy
 

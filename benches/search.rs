@@ -6,8 +6,10 @@ use std::hint::black_box;
 
 use criterion::Criterion;
 use multiobjective_search::{
-    Epsilon, Front, Graph, ReverseGraph, RoadGraph, TreeFront, ZeroHeuristic, apex_star, boa_star,
-    boa_star_eps, boba_star, emoa_star, emoa_star_tree, namoa_star, namoa_star_dr, pp_a_star,
+    Epsilon, Front, Graph, MvHeuristic, ReverseGraph, RoadGraph, SingleValued, TreeFront,
+    ZeroHeuristic, apex_star, boa_star, boa_star_eps, boba_star, emoa_star, emoa_star_tree,
+    heuristic_fn, mv_heuristic_fn, namoa_star, namoa_star_dr, namoa_star_dr_mvh,
+    namoa_star_dr_mvh_lazy, pp_a_star,
 };
 
 /// Runs every benchmark in this file with criterion's command-line flags.
@@ -18,6 +20,7 @@ fn main() {
     bench_road(&mut criterion);
     bench_three_objectives(&mut criterion);
     bench_four_objectives(&mut criterion);
+    bench_multi_valued(&mut criterion);
     bench_front(&mut criterion);
     bench_front_four(&mut criterion);
     criterion.final_summary();
@@ -159,6 +162,61 @@ fn bench_four_objectives(c: &mut Criterion) {
     });
     group.bench_function("emoa_star_tree", |b| {
         b.iter(|| emoa_star_tree(&grid, ZeroHeuristic, black_box(0), is_goal));
+    });
+    group.finish();
+}
+
+/// The exact multi-valued heuristic of a grid: per cell, the Pareto set of
+/// costs to `goal`. The grid is its own reverse, so this is one NAMOA* run
+/// from `goal` to every cell.
+fn exact_mvh<const N: usize>(grid: &Grid<N>, goal: u32) -> Vec<Vec<[u32; N]>> {
+    (0..grid.side * grid.side)
+        .map(|cell| {
+            let out = namoa_star(grid, ZeroHeuristic, goal, |s: &u32| *s == cell);
+            out.solutions.iter().map(|s| s.cost).collect()
+        })
+        .collect()
+}
+
+/// A multi-valued heuristic that looks up `table[cell]`.
+fn table(table: &[Vec<[u32; 3]>]) -> impl MvHeuristic<u32, [u32; 3]> + '_ {
+    mv_heuristic_fn(|s: &u32, out: &mut Vec<[u32; 3]>| out.extend(&table[*s as usize]))
+}
+
+/// NAMOA*dr with the ideal-point heuristic against both MVH searches on a
+/// three-objective grid: with the exact (consistent) MVH, and with every
+/// estimate halved (admissible, inconsistent; lazy search only).
+fn bench_multi_valued(c: &mut Criterion) {
+    let grid = Grid::<3> { side: 6 };
+    let goal = grid.goal();
+    let is_goal = |s: &u32| *s == goal;
+    let exact = exact_mvh(&grid, goal);
+    let halved: Vec<Vec<[u32; 3]>> = exact
+        .iter()
+        .map(|set| set.iter().map(|v| v.map(|c| c / 2)).collect())
+        .collect();
+    let ideal: Vec<[u32; 3]> = exact
+        .iter()
+        .map(|set| core::array::from_fn(|i| set.iter().map(|v| v[i]).min().unwrap_or(0)))
+        .collect();
+    let mut group = c.benchmark_group("grid_6x6_3obj_mvh");
+
+    group.bench_function("namoa_star_dr_ideal", |b| {
+        let h = heuristic_fn(|s: &u32| Some(ideal[*s as usize]));
+        b.iter(|| namoa_star_dr(&grid, h, black_box(0), is_goal));
+    });
+    group.bench_function("lazy_ideal", |b| {
+        let h = SingleValued(heuristic_fn(|s: &u32| Some(ideal[*s as usize])));
+        b.iter(|| namoa_star_dr_mvh_lazy(&grid, h, black_box(0), is_goal));
+    });
+    group.bench_function("lazy_exact", |b| {
+        b.iter(|| namoa_star_dr_mvh_lazy(&grid, table(&exact), black_box(0), is_goal));
+    });
+    group.bench_function("lazy_halved", |b| {
+        b.iter(|| namoa_star_dr_mvh_lazy(&grid, table(&halved), black_box(0), is_goal));
+    });
+    group.bench_function("eager_exact", |b| {
+        b.iter(|| namoa_star_dr_mvh(&grid, table(&exact), black_box(0), is_goal));
     });
     group.finish();
 }
