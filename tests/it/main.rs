@@ -7,6 +7,7 @@ mod boa;
 mod boba;
 mod brute_force;
 mod check;
+mod dimacs;
 mod fixtures;
 mod front;
 mod namoa;

@@ -257,8 +257,9 @@ loader yet.
    searches.
 4. **EMOA\*:** truncated 3D frontier (sorted `Vec`), `emoa_star`; the
    balanced-tree variant `emoa_star_tree` on `TreeFront`.
-5. **Benchmarks and 0.1.0:** DIMACS loader in a dev tool or example,
-   criterion benches, release.
+5. **Benchmarks and 0.1.0:** DIMACS loader (`RoadGraph`, in the library,
+   `no_std`, parsing from `&str`), criterion benches on a generated road
+   network in DIMACS format, release.
 
 ## Cross-crate needs
 

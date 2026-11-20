@@ -1,12 +1,13 @@
 //! Benchmarks for every search on pseudo-random grid graphs, and for the
 //! Pareto frontier that they share.
 
+use std::fmt::Write;
 use std::hint::black_box;
 
 use criterion::Criterion;
 use multiobjective_search::{
-    Epsilon, Front, Graph, ReverseGraph, TreeFront, ZeroHeuristic, boa_star, boa_star_eps,
-    boba_star, emoa_star, emoa_star_tree, namoa_star, namoa_star_dr, pp_a_star,
+    Epsilon, Front, Graph, ReverseGraph, RoadGraph, TreeFront, ZeroHeuristic, boa_star,
+    boa_star_eps, boba_star, emoa_star, emoa_star_tree, namoa_star, namoa_star_dr, pp_a_star,
 };
 
 /// Runs every benchmark in this file with criterion's command-line flags.
@@ -14,6 +15,7 @@ fn main() {
     let mut criterion = Criterion::default().configure_from_args();
 
     bench_two_objectives(&mut criterion);
+    bench_road(&mut criterion);
     bench_three_objectives(&mut criterion);
     bench_four_objectives(&mut criterion);
     bench_front(&mut criterion);
@@ -239,4 +241,80 @@ fn splitmix(x: u64) -> u32 {
     z = (z ^ (z >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
     z = (z ^ (z >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
     u32::try_from((z ^ (z >> 31)) >> 32).expect("upper 32 bits")
+}
+
+/// A generated road network in 9th DIMACS format, `side` x `side`
+/// intersections with two-way streets: distances of 50 to 149 units and
+/// travel times of 3 to 12 per unit, every sixth row and column a fast
+/// road. Generated, not an excerpt of the challenge data, whose licence is
+/// unclear. Returns the distance and the time `.gr` file.
+fn road_network(side: u32) -> (String, String) {
+    let id = |x: u32, y: u32| y * side + x + 1;
+    let mut arcs = Vec::new();
+
+    for y in 0..side {
+        for x in 0..side {
+            if x + 1 < side {
+                arcs.push((id(x, y), id(x + 1, y), y % 6 == 0));
+            }
+
+            if y + 1 < side {
+                arcs.push((id(x, y), id(x, y + 1), x % 6 == 0));
+            }
+        }
+    }
+
+    let mut distance = format!(
+        "c generated road network\np sp {} {}\n",
+        side * side,
+        arcs.len() * 2
+    );
+    let mut time = format!(
+        "c generated road network\np sp {} {}\n",
+        side * side,
+        arcs.len() * 2
+    );
+
+    for (k, &(a, b, fast)) in arcs.iter().enumerate() {
+        let seed = u64::try_from(k).expect("small");
+        let length = 50 + splitmix(seed * 2) % 100;
+        let per_unit = if fast {
+            3
+        } else {
+            6 + splitmix(seed * 2 + 1) % 7
+        };
+
+        for (from, to) in [(a, b), (b, a)] {
+            writeln!(distance, "a {from} {to} {length}").expect("String");
+            writeln!(time, "a {from} {to} {}", length * per_unit).expect("String");
+        }
+    }
+
+    (distance, time)
+}
+
+/// Loading and searching a generated 30 x 30 road network with the
+/// distance and time objectives, corner to corner.
+fn bench_road(c: &mut Criterion) {
+    let (distance, time) = road_network(30);
+    let graph = RoadGraph::from_dimacs(&distance, &time).expect("generated files are valid");
+    let goal = graph.node_count();
+    let is_goal = |s: &u32| *s == goal;
+    let mut group = c.benchmark_group("dimacs_generated_30x30");
+    group.sample_size(20);
+
+    group.bench_function("load", |b| {
+        b.iter(|| RoadGraph::from_dimacs(black_box(&distance), black_box(&time)));
+    });
+    group.bench_function("boa_star", |b| {
+        b.iter(|| boa_star(&graph, ZeroHeuristic, black_box(1), is_goal));
+    });
+    group.bench_function("boba_star", |b| {
+        b.iter(|| boba_star(&graph, black_box(1), goal));
+    });
+    group.bench_function("pp_a_star_1pct", |b| {
+        let eps = [Epsilon::new(1, 100); 2];
+        b.iter(|| pp_a_star(&graph, ZeroHeuristic, black_box(1), is_goal, eps));
+    });
+    group.finish();
 }

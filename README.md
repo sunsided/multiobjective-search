@@ -28,11 +28,15 @@ reference on random graphs with two to four objectives:
 - [x] Brute-force reference over simple paths (`brute_force`)
 - [x] Pareto frontier for any number of objectives, `O(log n)` queries for two
       (`Front`, `BiFront`)
-- [x] Criterion benchmarks on grid graphs
+- [x] 9th DIMACS Challenge loader (`RoadGraph`: distance and time `.gr`
+      files zipped into `[distance, time]` costs, `.co` coordinates), `no_std`
+- [x] Criterion benchmarks on grid graphs and on a generated road network in
+      DIMACS format (generated, since the challenge data's licence is unclear)
 
 Open:
 
-- [ ] DIMACS road-network benchmarks
+- [ ] Benchmarks on the real DIMACS road networks (download them and load
+      with `RoadGraph::from_dimacs`; not bundled)
 
 ## Breaking changes
 

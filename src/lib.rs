@@ -32,6 +32,8 @@
 //! - [`Cost`] (from `search-core`) and [`Dominates`]: scalar costs and
 //!   Pareto dominance.
 //! - [`Output`]: solutions sorted lexicographically by cost, plus counters.
+//! - [`RoadGraph`]: a loader for 9th DIMACS Challenge road networks
+//!   (`.gr` distance and time files, `.co` coordinates).
 //! - [`Epsilon`]: a rational tolerance `ε = num / den` for the approximate
 //!   searches, tested with [`Cost::saturating_times`].
 //!
@@ -49,6 +51,7 @@ extern crate alloc;
 mod boa;
 mod boba;
 mod cost;
+mod dimacs;
 mod emoa;
 mod epsilon;
 mod frontier_search;
@@ -62,6 +65,7 @@ mod reference;
 pub use boa::{boa_star, boa_star_approx, boa_star_eps};
 pub use boba::{boba_star, boba_star_with};
 pub use cost::{Dominates, add, weakly_dominates};
+pub use dimacs::{DimacsError, DimacsErrorKind, RoadGraph};
 pub use emoa::{emoa_star, emoa_star_tree};
 pub use epsilon::Epsilon;
 pub use graph::{Graph, ReverseGraph, ZeroHeuristic};
