@@ -237,6 +237,18 @@ where
         true
     }
 
+    /// The second cost of the last solution found, which is the smallest
+    /// so far; `None` before the first one.
+    pub(crate) fn secondary_bound(&self) -> Option<C> {
+        self.best_goal_g2
+    }
+
+    /// Sets the bound on `f1` beyond which labels cannot lead to new
+    /// solutions. Only ever lowered, by the BOBA* driver.
+    pub(crate) fn set_primary_bound(&mut self, bound: Option<C>) {
+        self.primary_bound = bound;
+    }
+
     /// Consumes the search and returns its solutions and counters.
     pub(crate) fn into_output(self) -> Output<G::State, [C; 2]> {
         Output {

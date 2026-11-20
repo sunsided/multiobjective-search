@@ -3,6 +3,7 @@
 //! the crate.
 
 mod boa;
+mod boba;
 mod brute_force;
 mod check;
 mod fixtures;

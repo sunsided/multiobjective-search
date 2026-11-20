@@ -1,6 +1,6 @@
 //! Test graphs, proptest strategies for them, and exact heuristics.
 
-use multiobjective_search::Graph;
+use multiobjective_search::{Graph, ReverseGraph};
 use proptest::prelude::*;
 
 /// Largest number of nodes in a generated graph. Brute force is exponential.
@@ -36,6 +36,17 @@ impl<const N: usize> Graph for EdgeList<N> {
     }
 }
 
+impl<const N: usize> ReverseGraph for EdgeList<N> {
+    fn predecessors(&self, state: &usize, out: &mut Vec<(usize, [u32; N])>) {
+        out.extend(
+            self.edges
+                .iter()
+                .filter(|(_, to, _)| to == state)
+                .map(|&(from, _, cost)| (from, cost)),
+        );
+    }
+}
+
 /// A search problem: graph, start node and goal set.
 #[derive(Debug, Clone)]
 pub struct Problem<const N: usize> {
@@ -61,6 +72,18 @@ pub fn problems<const N: usize>() -> impl Strategy<Value = Problem<N>> {
                 start,
                 goals,
             })
+    })
+}
+
+/// Generates small random problems with exactly one goal node, which may
+/// be the start or unreachable.
+pub fn single_goal_problems<const N: usize>() -> impl Strategy<Value = Problem<N>> {
+    (1..=MAX_NODES).prop_flat_map(|nodes| {
+        (edges::<N>(nodes), 0..nodes, 0..nodes).prop_map(move |(edges, start, goal)| Problem {
+            graph: EdgeList { nodes, edges },
+            start,
+            goals: (0..nodes).map(|v| v == goal).collect(),
+        })
     })
 }
 

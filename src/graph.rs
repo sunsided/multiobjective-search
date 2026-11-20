@@ -24,6 +24,22 @@ pub trait Graph {
     fn successors(&self, state: &Self::State, out: &mut Vec<(Self::State, Self::Weight)>);
 }
 
+/// A [`Graph`] that can also enumerate incoming edges, for bidirectional
+/// search.
+///
+/// The predecessors must mirror the successors exactly: `(p, w)` is
+/// reported by `predecessors(s)` once for every `(s, w)` that
+/// `successors(p)` reports, parallel edges included.
+pub trait ReverseGraph: Graph {
+    /// Appends every incoming edge of `state` to `out` as
+    /// `(predecessor, weight)`, where `weight` is the cost of the edge from
+    /// `predecessor` to `state`.
+    ///
+    /// `out` is empty on entry; the caller clears and reuses it between
+    /// calls.
+    fn predecessors(&self, state: &Self::State, out: &mut Vec<(Self::State, Self::Weight)>);
+}
+
 /// A per-objective lower bound on the remaining cost to a goal.
 ///
 /// Algorithms state their own requirements; BOA* needs every objective to
