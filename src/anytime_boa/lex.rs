@@ -17,7 +17,7 @@ use crate::output::{Solution, Stats};
 /// With a consistent heuristic the first label popped at a state carries
 /// its lexicographically smallest `g`, so each state is expanded once.
 /// Expansions and generations are added to `stats`.
-pub(super) fn lex_first<G, H, C, P>(
+pub(crate) fn lex_first<G, H, C, P>(
     graph: &G,
     heuristic: &mut H,
     start: &G::State,

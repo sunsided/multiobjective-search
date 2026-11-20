@@ -377,6 +377,29 @@ workers, blocks) to 7.2 ms (2 + 2); on the 24x24 two-objective grid
 parallel BOBA* takes 5.5 ms and SIP-MOSP 15 to 21 ms. These graphs are
 far smaller than the paper's, where coordination is amortized.
 
+### Gaps against the Craveirinha et al. 2024 survey
+
+J. Craveirinha, J. Clímaco, R. Girão-Silva, M. Pascoal. "Multiobjective
+Path Problems and Algorithms in Telecommunication Network Design:
+Overview and Trends." Algorithms 17(6):222, 2024. Used as a map of
+problem classes; what the crate lacked when it was read:
+
+| Class (survey section) | Status here | Why |
+|---|---|---|
+| Minsum–maxmin: an additive cost and a bottleneck capacity (2.2.2; Martins 1984, Gandibleux et al. 2006) | **implemented**: `minsum_maxmin`, label setting with BOA*-style one-value-per-state pruning; min–max via `Reverse` | fits the `Graph` model with `Weight = (C, K)`; cross-checked against enumeration of simple paths |
+| Constrained shortest path: minimum cost with a resource budget (2.2.3, relays and reliability thresholds as variants) | **implemented** for one budget: `constrained_shortest_path` | BOA*'s pruning plus `f2 <= budget`, first solution is optimal; cross-checked for every budget |
+| Ranking methods: k-shortest loopless paths in one objective, keep the efficient ones (2.2.1, Algorithm 2; Clímaco and Martins 1982) | **implemented**: `ranking` | best-first enumeration of loopless paths up to the `(c2, c1)` optimum's first cost; cross-checked against brute force |
+| Two-phase methods: supported points by weighted sums, then the duality gaps (2.2.1) | not implemented | needs weighted scalar searches with cost-by-cost weights between front points; the exact label-setting searches already cover the front |
+| Several maxmin objectives, or bottleneck mixed with several sums (2.2.2; Pinto et al., Bornstein et al.) | not implemented | the dominance test changes (weakly efficient subpaths); one bottleneck with one sum is covered |
+| Hop count as an objective (2.2.2; Pascoal 2018) | covered | an additive objective with cost 1 per edge |
+| Ratio objectives: cost/capacity, cost/reliability, linear fractional (2.2.3) | not implemented | not monotone under extension; need parametric search and real division |
+| Quickest path, `sum delay + σ / min capacity` (2.2.3) | not implemented directly | its optimum lies on the minsum–maxmin front (Pelegrín and Fernández), so it is a scan of `minsum_maxmin`'s output, but needs real division |
+| Disjoint and maximally disjoint path pairs, k dissimilar paths (2.2.3) | not implemented | needs edge identities and residual-graph surgery (Suurballe), outside the successor-function model |
+| Labelling-type and label-count objectives, knapsack-type paths (2.2.2, 2.2.3) | not implemented | non-additive, problem-specific |
+| Interactive and reference-point methods (INT class) | not implemented | a decision-maker loop around a solver, not a search; a reference-point pick is post-processing of an `Output` |
+| Approximation schemes (2.3; Warburton, Tsaggouris and Zaroliagis) | partly covered | the crate's ε-approximate searches (BOA*ε, PP-A*, A*pex, A-BOA*ε) have the same guarantees; FPTAS proper is not implemented |
+| Uncertainty: stochastic, robust, fuzzy costs (2.4) | not implemented | different cost model |
+
 ## Testing strategy
 
 - **Reference implementation:** brute-force enumeration of all simple paths

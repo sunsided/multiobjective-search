@@ -44,6 +44,10 @@ reference on random graphs with two to four objectives:
 - [x] SIP-MOSP: asynchronous parallel exact search with versioned frontier
       snapshots and indexed dominance pruning (`sip_mosp`, feature
       `parallel`), and its indexed frontier (`IndexedFront`, `FrontIndex`)
+- [x] From the Craveirinha et al. 2024 survey: minsum–maxmin paths
+      (`minsum_maxmin`), constrained shortest paths (`constrained_shortest_path`)
+      and the classic ranking method (`ranking`); the rest of the survey's
+      classes are listed in `docs/design.md`
 - [x] Brute-force reference over simple paths (`brute_force`)
 - [x] Pareto frontier for any number of objectives, `O(log n)` queries for two
       (`Front`, `BiFront`)

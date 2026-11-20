@@ -19,3 +19,4 @@ mod parallel;
 mod reference;
 #[cfg(feature = "parallel")]
 mod sip;
+mod survey;

@@ -24,6 +24,9 @@
 //! | [`namoa_star_dr_mvh_lazy`] | any `N` | admissible, multi-valued | L-NAMOA*dr-mvh: NAMOA*dr with a [`MvHeuristic`] and lazy dimensionality reduction. |
 //! | [`namoa_star_dr_mvh`] | any `N` | consistent, multi-valued | NAMOA*dr-mvh: one label per estimate; a baseline, slower than the lazy variant. |
 //! | [`namoa_star`] | any `N` | admissible | Classic baseline; label-setting with [`ZeroHeuristic`]. |
+//! | [`minsum_maxmin`] | sum + bottleneck | consistent on the sum | Minimal cost, maximal bottleneck capacity (Martins 1984). |
+//! | [`constrained_shortest_path`] | 2 | consistent | Cheapest path with the second cost within a budget. |
+//! | [`ranking`] | 2 | consistent | The classic ranking method: loopless paths by first cost. |
 //! | [`brute_force`] | any `N` | none | Exhaustive reference for tests on small graphs. |
 //!
 //! Supporting types:
@@ -70,6 +73,8 @@ mod anytime_boa;
 mod apex;
 mod boa;
 mod boba;
+mod bottleneck;
+mod constrained;
 mod cost;
 mod dimacs;
 mod emoa;
@@ -82,6 +87,7 @@ mod namoa_mvh;
 mod output;
 mod pareto;
 mod pp_a;
+mod ranking;
 mod reference;
 #[cfg(feature = "parallel")]
 mod sip;
@@ -95,6 +101,8 @@ pub use boa::{boa_star, boa_star_approx, boa_star_eps};
 pub use boba::{boba_star, boba_star_with};
 #[cfg(feature = "parallel")]
 pub use boba::{boba_star_parallel, boba_star_with_parallel};
+pub use bottleneck::{Bottleneck, minsum_maxmin};
+pub use constrained::constrained_shortest_path;
 pub use cost::{Dominates, add, weakly_dominates};
 pub use dimacs::{DimacsError, DimacsErrorKind, RoadGraph};
 pub use emoa::{emoa_star, emoa_star_tree};
@@ -106,6 +114,7 @@ pub use namoa_mvh::{namoa_star_dr_mvh, namoa_star_dr_mvh_lazy};
 pub use output::{Output, Solution, Stats};
 pub use pareto::{BiFront, Front, FrontIndex, IndexedFront, TreeFront};
 pub use pp_a::{pp_a_star, pp_a_star_iterative};
+pub use ranking::ranking;
 pub use reference::brute_force;
 pub use search_core::{Cost, Heuristic, HeuristicFn, heuristic_fn};
 #[cfg(feature = "parallel")]

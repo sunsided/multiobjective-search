@@ -25,7 +25,7 @@
 //! ```
 
 mod factor;
-mod lex;
+pub(crate) mod lex;
 
 use alloc::collections::{BTreeMap, BinaryHeap};
 use alloc::vec::Vec;
