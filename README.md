@@ -2,17 +2,33 @@
 
 Multi-objective shortest paths: BOA*, BOBA*, EMOA* and NAMOA* over Pareto frontiers.
 
-## Planned scope
+## Scope and status
 
-- BOA*: bi-objective A*
-- BOBA*: bidirectional bi-objective A*
-- EMOA*: multi-objective A*
-- NAMOA*: classical multi-objective A* baseline
-- Fast Pareto-frontier storage per state
+Implemented, cross-checked against each other and against a brute-force
+reference on random graphs with two to four objectives:
+
+- [x] BOA\*: bi-objective A* (`boa_star`)
+- [x] BOA\* with an additive tolerance on the second objective (`boa_star_approx`)
+- [x] BOBA\*: bidirectional bi-objective A* (`boba_star`), without the paper's
+      early solution update and heuristic tuning
+- [x] EMOA\*: multi-objective A* with truncated dominance checks (`emoa_star`),
+      sorted `Vec` instead of a balanced tree
+- [x] NAMOA\*: classic multi-objective A* for admissible heuristics (`namoa_star`)
+- [x] NAMOA\*dr: NAMOA* with dimensionality reduction (`namoa_star_dr`)
+- [x] Brute-force reference over simple paths (`brute_force`)
+- [x] Pareto frontier for any number of objectives, `O(log n)` queries for two
+      (`Front`, `BiFront`)
+- [x] Criterion benchmarks on grid graphs
+
+Open:
+
+- [ ] Multiplicative `(1 + ε)` approximation (BOA*ε, PP-A*)
+- [ ] DIMACS road-network benchmarks
 
 ## Status
 
-Pre-release. Version 0.0.0 reserves the name; the API is a draft and will change. BOA* and a two-objective Pareto frontier exist; see `docs/design.md` for the plan.
+Pre-release. Version 0.0.0 reserves the name; the API is a draft and will change.
+See `docs/design.md` for the design.
 
 ## License
 

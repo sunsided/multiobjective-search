@@ -7,16 +7,29 @@
 //!
 //! ## Contents
 //!
-//! - [`boa_star`]: bi-objective A* (Hernández et al., ICAPS 2020).
-//! - [`BiFront`]: a two-objective Pareto frontier.
-//! - [`Graph`] and [`Heuristic`]: the search-space interface.
+//! | Function | Objectives | Heuristic | Notes |
+//! |---|---|---|---|
+//! | [`boa_star`] | 2 | consistent | Fastest unidirectional choice for two objectives. |
+//! | [`boa_star_approx`] | 2 | consistent | BOA* with an additive tolerance on the second objective. |
+//! | [`boba_star`] | 2 | computed internally | Bidirectional; needs a [`ReverseGraph`] and a single goal. |
+//! | [`emoa_star`] | any `N` | consistent | Lazy open list, truncated dominance; `O(log n)` checks for 3 objectives. |
+//! | [`namoa_star_dr`] | any `N` | consistent | NAMOA* with dimensionality reduction. |
+//! | [`namoa_star`] | any `N` | admissible | Classic baseline; label-setting with [`ZeroHeuristic`]. |
+//! | [`brute_force`] | any `N` | none | Exhaustive reference for tests on small graphs. |
+//!
+//! Supporting types:
+//!
+//! - [`Front`] and [`BiFront`]: Pareto frontiers, `O(log n)` queries for two
+//!   objectives.
+//! - [`Graph`], [`ReverseGraph`] and [`Heuristic`]: the search-space
+//!   interface.
 //! - [`Cost`] and [`Dominates`]: scalar costs and Pareto dominance.
+//! - [`Output`]: solutions sorted lexicographically by cost, plus counters.
 //!
-//! ## Planned
+//! ## Not implemented
 //!
-//! - BOBA*: bidirectional bi-objective A*
-//! - EMOA*: multi-objective A* with fast frontier checks
-//! - NAMOA*: classical multi-objective A* baseline
+//! - A multiplicative `(1 + ε)` approximation such as BOA*ε or PP-A*:
+//!   [`Cost`] has no multiplication.
 //!
 //! ## Status
 //!

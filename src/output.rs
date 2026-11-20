@@ -24,8 +24,11 @@ pub struct Stats {
 /// The result of a multi-objective search.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Output<S, W> {
-    /// One solution per Pareto-optimal cost vector, sorted by the first
-    /// objective ascending. Empty when no goal is reachable.
+    /// One solution per Pareto-optimal cost vector, sorted by cost
+    /// lexicographically ascending (for two objectives: first strictly
+    /// ascending, second strictly descending). Empty when no goal is
+    /// reachable. [`boa_star_approx`](crate::boa_star_approx) returns a
+    /// covering subset instead.
     pub solutions: Vec<Solution<S, W>>,
     /// Search effort counters.
     pub stats: Stats,

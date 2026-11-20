@@ -1,7 +1,7 @@
 # multiobjective-search: design
 
-Status: draft, 2026-11-20. Covers the plan up to 0.1.0 and the shape of
-later milestones.
+Status: draft, 2026-11-20, updated after milestones 1-4. Covers the plan
+up to 0.1.0 and the shape of later milestones.
 
 ## Scope
 
@@ -17,12 +17,16 @@ In scope:
 - EMOA* (NAMOA*-style search with faster frontier checks), for three or
   more objectives.
 - Pareto-frontier data structures that the algorithms share.
+- NAMOA*dr (NAMOA* with dimensionality reduction, Pulido et al. 2015).
+- `boa_star_approx`: BOA* with an additive tolerance on the second
+  objective (cheap, one changed comparison).
+- `brute_force`: an exhaustive public reference for tests.
 
 Out of scope:
 
-- Approximate or anytime variants (A*pex, ε-dominance, PP-A*). They may come
-  later behind their own entry points; the frontier types should not block
-  them.
+- Multiplicative approximate or anytime variants (A*pex, BOA*ε, PP-A*).
+  They need multiplication on costs, which `Cost` does not have. They may
+  come later behind their own entry points.
 - Constrained shortest paths (resource-constrained, budgeted). Different
   problem, different output.
 - Any planning-specific model. The crate does not depend on `sas-plus`,
@@ -108,9 +112,28 @@ rebuilt from parent links once a solution is found. The open list stores
   search plus removal of the dominated run that follows it. Equal points are
   rejected (the frontier keeps one representative per cost vector).
   Membership and dominance tests are `O(log n)`.
-- `Front<C, N>` (later): general frontier for NAMOA*. Starts as a flat
-  `Vec` with linear checks; EMOA* replaces the 3D case with a balanced tree
-  over the last two objectives (Ren et al.).
+- `Front<C, N>`: the general frontier; `BiFront<C>` is `Front<C, 2>`.
+  Sorted lexicographically. Only points lexicographically no greater than
+  a probe can weakly dominate it, so a query binary-searches that prefix;
+  for `N <= 2` the last point of the prefix decides (`O(log n)`), for
+  `N > 2` the prefix is scanned. Insertion removes dominated points (a
+  contiguous run for `N = 2`, a `retain` otherwise).
+- `TruncatedFront<C, N>` (private): dominance over objectives `1..N` only,
+  for lexicographic searches with consistent heuristics. Three objectives
+  map onto a 2D `Front`; other `N` use a `Front<C, N>` with the first
+  component zeroed. EMOA*'s balanced tree is replaced by the sorted `Vec`:
+  same query cost, `O(n)` insertion shift (shortcut; revisit if profiles
+  show insertion dominating).
+
+NAMOA*, NAMOA*dr and EMOA* share one private engine
+(`frontier_search`) with two switches: the closed archive (full `Front`
+or `TruncatedFront`) and whether a per-state open frontier is kept
+(NAMOA*, NAMOA*dr) or labels are filtered lazily at pop time (EMOA*).
+
+BOBA* reuses BOA*'s `Search` twice: forward on the graph, backward on a
+`Reversed` adapter that swaps the objectives, so the backward direction
+is BOA* in `(f2, f1)` order. Each direction's last solution bounds the
+other's primary objective; the run stops when either direction is done.
 
 BOA* does not need a per-state frontier: with lexicographic expansion order
 and a consistent heuristic, the minimum second cost seen at a state
@@ -127,13 +150,14 @@ for sol in &out.solutions {
 // out.stats: expanded, generated
 ```
 
-- One free function per algorithm: `boa_star`, later `boba_star`,
-  `namoa_star`, `emoa_star`. A builder or config struct only once there are
+- One free function per algorithm: `boa_star`, `boa_star_approx`,
+  `boba_star`, `namoa_star`, `namoa_star_dr`, `emoa_star`, `brute_force`. A builder or config struct only once there are
   options (time limits, solution limits, ε).
 - Goal is a predicate, so a goal set works. BOBA* needs a single goal state
   and gets its own signature.
-- Solutions come sorted by the first objective ascending; for two
-  objectives that means the second strictly descending.
+- Solutions come sorted lexicographically by cost; for two objectives
+  that means the first strictly ascending and the second strictly
+  descending.
 - Output is `Output { solutions, stats }`, shared by all algorithms.
 
 ## Algorithms and references
@@ -148,11 +172,18 @@ for sol in &out.solutions {
   with consistent heuristics." Journal of the ACM, 2010.
 - **BOBA\*:** S. Ahmadi, G. Tack, D. Harabor, P. Kilby. "Bi-Objective
   Search with Bi-Directional A*." ESA 2021.
+- **NAMOA\*dr:** F.-J. Pulido, L. Mandow, J. L. Pérez de la Cruz.
+  "Dimensionality reduction in multiobjective shortest path search."
+  Computers & Operations Research, 2015.
+- **BOA\*ε (multiplicative, not implemented):** B. Goldin, O. Salzman.
+  "Approximate bi-objective search by efficient dominance checks." SoCS
+  2021.
 - **EMOA\*:** Z. Ren, R. Zhan, S. Rathinam, M. Likhachev, H. Choset.
   "Enhanced Multi-Objective A* Using Balanced Binary Search Trees." SoCS
   2022.
 
-Citations are from memory; check venue and year before 0.1.0.
+BOBA* was checked against the arXiv version (2105.11888v2). The other
+citations are from memory; check venue and year before 0.1.0.
 
 ## Testing strategy
 
@@ -172,21 +203,31 @@ Citations are from memory; check venue and year before 0.1.0.
   decreasing.
 - **Fixed cases:** start is a goal, goal unreachable, a hand-computed graph.
 - **Frontier:** proptest `BiFront` against the naive filter.
-- Later algorithms are cross-checked against BOA* (two objectives) and
-  against NAMOA* (more objectives), plus the brute-force reference.
+- Every algorithm is cross-checked against the brute-force reference for
+  two, three and four objectives (BOA* and BOBA*: two), with the zero and
+  the exact heuristic; classic NAMOA* also with an admissible but
+  inconsistent one (exact values zeroed at random states). For two
+  objectives all algorithms are also compared with BOA*.
+- `boa_star_approx` is checked for its stated guarantee: every returned
+  cost is Pareto-optimal and every Pareto-optimal cost is covered within
+  the slack.
 - Benchmarks (later): DIMACS road networks with distance and time, the
   standard bi-objective benchmark set used by the BOA* paper.
 
 ## Milestones
 
-1. **Frontier and BOA\*** (this draft): `Cost`, `Dominates`, `Graph`,
+Milestones 1 to 4 are done (NAMOA*dr, `boa_star_approx` and
+`brute_force` came along); milestone 5 has grid benches but no DIMACS
+loader yet.
+
+1. **Frontier and BOA\***: `Cost`, `Dominates`, `Graph`,
    `Heuristic`, `BiFront`, `boa_star`, brute-force cross-check tests.
 2. **NAMOA\*:** general `Front<C, N>`, per-state open and closed frontiers,
    `namoa_star` for any `N`. Cross-check against BOA* for `N = 2`.
 3. **BOBA\*:** `ReverseGraph`, bidirectional search with the two
    lexicographic directions, heuristics from single-objective backward
    searches.
-4. **EMOA\*:** tree-based 3D frontier, `emoa_star`.
+4. **EMOA\*:** truncated 3D frontier (sorted `Vec`, not a tree), `emoa_star`.
 5. **Benchmarks and 0.1.0:** DIMACS loader in a dev tool or example,
    criterion benches, release.
 
@@ -212,3 +253,8 @@ None for milestone 1. Later:
   heuristics and BOBA*?
 - Should the crate guard against negative costs (an `Unsigned` marker
   trait) instead of documenting the precondition?
+- Should `Cost` gain multiplication (or a scaling trait) so that a
+  multiplicative `(1 + ε)` approximation fits? Draft: no, additive only.
+- Should BOBA* accept user heuristics, or bounded Dijkstra as in the
+  paper? Draft: full Dijkstra, computed internally.
+- Should `brute_force` stay public or move to the tests? Draft: public.
