@@ -28,6 +28,8 @@ use core::cmp::Reverse;
 
 use search_core::Cost;
 
+use crate::boa::{Completion, Completions};
+
 /// Exact per-objective distances for BOBA*'s two directions, restricted to
 /// the states that can lie on a Pareto-optimal path.
 pub(super) struct Bounds<S, C> {
@@ -97,6 +99,50 @@ impl<S: Clone + Ord, C: Cost> Bounds<S, C> {
     }
 }
 
+/// The forward direction's view of [`Bounds`] for the early solution
+/// update: the `(c1, c2)`-optimal completion from a state to the goal.
+pub(super) struct Forward<'a, S, C>(pub(super) &'a Bounds<S, C>);
+
+impl<S: Clone + Ord, C: Cost> Completions<S, C> for Forward<'_, S, C> {
+    fn completion(&self, state: &S) -> Option<Completion<C>> {
+        let [primary, secondary] = self.0.to_goal_1.closed_cost(state)?;
+        // c1 of the c2-optimal completion; equal to the c1 optimum when one
+        // completion is optimal in both objectives.
+        let ub1 = self.0.to_goal_2.closed_cost(state)?[1];
+
+        Some(Completion {
+            primary,
+            secondary,
+            terminal: primary == ub1,
+        })
+    }
+
+    fn suffix(&self, state: &S, out: &mut Vec<S>) {
+        self.0.to_goal_1.path_to_source(state, out);
+    }
+}
+
+/// The backward direction's view of [`Bounds`], in its swapped objective
+/// order: the `(c2, c1)`-optimal completion from a state back to the start.
+pub(super) struct Backward<'a, S, C>(pub(super) &'a Bounds<S, C>);
+
+impl<S: Clone + Ord, C: Cost> Completions<S, C> for Backward<'_, S, C> {
+    fn completion(&self, state: &S) -> Option<Completion<C>> {
+        let [primary, secondary] = self.0.from_start_2.closed_cost(state)?;
+        let ub2 = self.0.from_start_1.closed_cost(state)?[1];
+
+        Some(Completion {
+            primary,
+            secondary,
+            terminal: primary == ub2,
+        })
+    }
+
+    fn suffix(&self, state: &S, out: &mut Vec<S>) {
+        self.0.from_start_2.path_to_source(state, out);
+    }
+}
+
 /// A lexicographic best-first search from one source over one objective
 /// pair: A* on the primary objective with a consistent heuristic, ties
 /// broken by the secondary path cost.
@@ -108,17 +154,20 @@ struct Lex<S, C> {
     /// Per reached state: the lexicographically best `(g_primary,
     /// g_secondary)` pushed, and whether the state was expanded, which
     /// makes that cost exact.
-    labels: BTreeMap<S, Label<C>>,
+    labels: BTreeMap<S, Label<S, C>>,
     /// Reused edge buffer, empty between expansions.
     edges: Vec<(S, [C; 2])>,
 }
 
 /// The bookkeeping of one state reached by a [`Lex`] search.
-struct Label<C> {
+struct Label<S, C> {
     /// Best `(g_primary, g_secondary)` pushed so far.
     g: [C; 2],
     /// `true` once the state was expanded; `g` is then exact.
     closed: bool,
+    /// The state `g` was reached from, one step closer to the source;
+    /// `None` for the source.
+    parent: Option<S>,
 }
 
 /// One open-list entry of [`Lex`]: the key `(f_primary, g_secondary)`, the
@@ -135,6 +184,7 @@ impl<S: Clone + Ord, C: Cost> Lex<S, C> {
             Label {
                 g: [C::ZERO; 2],
                 closed: false,
+                parent: None,
             },
         );
         open.push(Reverse(([C::ZERO; 2], C::ZERO, source)));
@@ -149,9 +199,26 @@ impl<S: Clone + Ord, C: Cost> Lex<S, C> {
 
     /// The exact primary distance of `state` if it was expanded.
     fn distance(&self, state: &S) -> Option<C> {
+        self.closed_cost(state).map(|g| g[0])
+    }
+
+    /// The lexicographically optimal `(primary, secondary)` cost from the
+    /// source to `state`, if `state` was expanded.
+    fn closed_cost(&self, state: &S) -> Option<[C; 2]> {
         self.labels
             .get(state)
-            .and_then(|label| label.closed.then_some(label.g[0]))
+            .and_then(|label| label.closed.then_some(label.g))
+    }
+
+    /// Appends the states of the optimal path from `state` back to the
+    /// source, `state` excluded and the source included.
+    fn path_to_source(&self, state: &S, out: &mut Vec<S>) {
+        let mut current = self.labels.get(state).and_then(|l| l.parent.as_ref());
+
+        while let Some(next) = current {
+            out.push(next.clone());
+            current = self.labels.get(next).and_then(|l| l.parent.as_ref());
+        }
     }
 
     /// Expands states until `target` is expanded and returns the secondary
@@ -240,6 +307,7 @@ impl<S: Clone + Ord, C: Cost> Lex<S, C> {
                 Label {
                     g: g_next,
                     closed: false,
+                    parent: Some(state.clone()),
                 },
             );
             self.open

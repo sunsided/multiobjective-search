@@ -67,6 +67,35 @@ fn start_is_goal() {
     assert_eq!(out.solutions[0].path, [0]);
 }
 
+/// On a chain the start's completion is optimal in both objectives, so the
+/// early solution update records the whole path and nothing is expanded.
+#[test]
+fn chain_is_solved_without_expansion() {
+    let p = problem(4, &[(0, 1, [1, 2]), (1, 2, [3, 1]), (2, 3, [1, 1])], 0, 3);
+    let out = solve(&p);
+
+    assert_eq!(out.solutions.len(), 1);
+    assert_eq!(out.solutions[0].cost, [5, 4]);
+    assert_eq!(out.solutions[0].path, [0, 1, 2, 3]);
+    assert_eq!(out.stats.expanded, 0);
+}
+
+/// An early forward solution made before the backward bound arrives can be
+/// dominated by the backward search's first solution; the join drops it.
+#[test]
+fn early_solution_overlap_is_filtered() {
+    let edges = [
+        (2, 1, [3, 0]),
+        (1, 0, [4, 0]),
+        (1, 0, [2, 2]),
+        (2, 1, [1, 1]),
+    ];
+    let p = problem(3, &edges, 2, 0);
+    let costs: Vec<_> = solve(&p).solutions.iter().map(|s| s.cost).collect();
+
+    assert_eq!(costs, [[3, 3], [5, 1], [7, 0]]);
+}
+
 /// An unreachable goal yields no solutions and no labels.
 #[test]
 fn unreachable_goal() {

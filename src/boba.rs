@@ -24,15 +24,21 @@
 //!     bwd --> merge
 //! ```
 //!
+//! With its own heuristics, BOBA* also uses the paper's two enhancements
+//! (Algorithm 2): the *early solution update* joins a popped label with the
+//! known optimal completion of its state, records the joined path as a
+//! solution if its second cost is the smallest so far, and does not expand
+//! the label at all when that completion is optimal in both objectives;
+//! *heuristic tuning* raises the other direction's secondary heuristic at a
+//! state to the primary `g` of its first expansion here. Tuning also runs
+//! with caller-supplied heuristics ([`boba_star_with`]).
+//!
 //! Differences from the paper, all of which only cost speed:
 //!
 //! - The searches alternate one label at a time instead of running in
 //!   parallel threads (the crate is `no_std`).
 //! - The four cost-bounded preliminary searches (see `bounds`) run one
 //!   after another instead of two at a time.
-//! - The paper's "early solution update" (joining a label with its
-//!   complementary shortest path) and "secondary heuristic tuning" are not
-//!   implemented.
 //! - The search stops as soon as either direction is done, instead of
 //!   letting both run out; at that point every solution has been found
 //!   (see [`boba_star`]).
@@ -43,7 +49,7 @@ use alloc::vec::Vec;
 
 use search_core::{Cost, Heuristic, heuristic_fn};
 
-use crate::boa::{Search, Tolerance};
+use crate::boa::{Completions, NoCompletions, Search, Tolerance};
 use crate::graph::{Graph, ReverseGraph};
 use crate::output::{Output, Solution, Stats};
 
@@ -126,8 +132,9 @@ where
 
     let forward_h = heuristic_fn(|s: &G::State| bounds.forward(s));
     let backward_h = heuristic_fn(|s: &G::State| bounds.backward(s));
+    let completions = (bounds::Forward(&bounds), bounds::Backward(&bounds));
 
-    boba_star_with(graph, start, goal, forward_h, backward_h)
+    bidirectional(graph, start, goal, forward_h, backward_h, completions)
 }
 
 /// [`boba_star`] with caller-supplied heuristics instead of the internal
@@ -181,7 +188,7 @@ pub fn boba_star_with<G, C, F, B>(
     start: G::State,
     goal: G::State,
     forward_h: F,
-    mut backward_h: B,
+    backward_h: B,
 ) -> Output<G::State, [C; 2]>
 where
     G: ReverseGraph<Weight = [C; 2]>,
@@ -189,14 +196,50 @@ where
     F: Heuristic<G::State, [C; 2]>,
     B: Heuristic<G::State, [C; 2]>,
 {
+    let completions = (NoCompletions, NoCompletions);
+
+    bidirectional(graph, start, goal, forward_h, backward_h, completions)
+}
+
+/// Runs the two BOA* directions in lockstep, exchanging their bounds and,
+/// for heuristic tuning, their first expansions. `completions` are the
+/// known completions of both directions for the early solution update:
+/// forward to the goal, backward to the start in swapped order.
+fn bidirectional<G, C, F, B, KF, KB>(
+    graph: &G,
+    start: G::State,
+    goal: G::State,
+    forward_h: F,
+    mut backward_h: B,
+    completions: (KF, KB),
+) -> Output<G::State, [C; 2]>
+where
+    G: ReverseGraph<Weight = [C; 2]>,
+    C: Cost,
+    F: Heuristic<G::State, [C; 2]>,
+    B: Heuristic<G::State, [C; 2]>,
+    KF: Completions<G::State, C>,
+    KB: Completions<G::State, C>,
+{
     let backward_h = heuristic_fn(move |s: &G::State| backward_h.estimate(s).map(swap));
     let reversed = Reversed(graph);
 
-    let is_goal = equals(goal.clone());
-    let is_start = equals(start.clone());
+    let (forward_k, backward_k) = completions;
+    let mut forward = Search::with_completions(
+        graph,
+        forward_h,
+        equals(goal.clone()),
+        Tolerance::EXACT,
+        forward_k,
+    );
+    let mut backward = Search::with_completions(
+        &reversed,
+        backward_h,
+        equals(start.clone()),
+        Tolerance::EXACT,
+        backward_k,
+    );
 
-    let mut forward = Search::new(graph, forward_h, is_goal, Tolerance::EXACT);
-    let mut backward = Search::new(&reversed, backward_h, is_start, Tolerance::EXACT);
     forward.push_start(start);
     backward.push_start(goal);
 
@@ -205,15 +248,43 @@ where
             break;
         }
 
+        tune(&mut forward, &mut backward);
         backward.set_primary_bound(forward.secondary_bound());
         if !backward.step() {
             break;
         }
 
+        tune(&mut backward, &mut forward);
         forward.set_primary_bound(backward.secondary_bound());
     }
 
     merge(forward.into_output(), backward.into_output())
+}
+
+/// Heuristic tuning (Ahmadi et al., line 10 of Algorithm 2): the first
+/// expansion of a state in one direction, at primary cost `g`, raises the
+/// other direction's secondary heuristic there to `g`.
+///
+/// Every cheaper path to the state was pruned in `from`, so its
+/// completions are weakly dominated by solutions `from` already has; the
+/// other direction need not find them.
+fn tune<G1, G2, H1, H2, P1, P2, K1, K2, C>(
+    from: &mut Search<'_, G1, H1, C, P1, K1>,
+    to: &mut Search<'_, G2, H2, C, P2, K2>,
+) where
+    G1: Graph<Weight = [C; 2]>,
+    G2: Graph<State = G1::State, Weight = [C; 2]>,
+    H1: Heuristic<G1::State, [C; 2]>,
+    H2: Heuristic<G1::State, [C; 2]>,
+    P1: Fn(&G1::State) -> bool,
+    P2: Fn(&G1::State) -> bool,
+    K1: Completions<G1::State, C>,
+    K2: Completions<G1::State, C>,
+    C: Cost,
+{
+    if let Some((state, g)) = from.take_first_expansion() {
+        to.raise_secondary(state, g);
+    }
 }
 
 /// The reversed graph with swapped objectives, searched by the backward
@@ -252,16 +323,33 @@ fn swap<C>([first, second]: [C; 2]) -> [C; 2] {
 /// The forward solutions cover the low end of the first objective, the
 /// backward ones the high end, in descending first-objective order; their
 /// paths run from the goal to the start with swapped costs.
-fn merge<S, C>(forward: Output<S, [C; 2]>, backward: Output<S, [C; 2]>) -> Output<S, [C; 2]> {
-    let mut solutions = forward.solutions;
+///
+/// The two ends can overlap by one cost vector: a direction's last
+/// solution may come from an early solution update, made before the other
+/// direction's bound arrived, and be dominated by (or equal to) the other
+/// direction's first. The join keeps only the non-dominated ones.
+fn merge<S, C: Cost>(forward: Output<S, [C; 2]>, backward: Output<S, [C; 2]>) -> Output<S, [C; 2]> {
+    let mut all = forward.solutions;
 
-    solutions.extend(backward.solutions.into_iter().rev().map(|mut solution| {
+    all.extend(backward.solutions.into_iter().rev().map(|mut solution| {
         solution.path.reverse();
         Solution {
             cost: swap(solution.cost),
             path: solution.path,
         }
     }));
+
+    // Stable: of two equal cost vectors, the forward solution stays.
+    all.sort_by_key(|solution| solution.cost);
+    let mut solutions: Vec<Solution<S, [C; 2]>> = Vec::with_capacity(all.len());
+    for solution in all {
+        if solutions
+            .last()
+            .is_none_or(|last| solution.cost[1] < last.cost[1])
+        {
+            solutions.push(solution);
+        }
+    }
 
     Output {
         solutions,

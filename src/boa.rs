@@ -259,6 +259,42 @@ impl<C: Cost> Tolerance<C> {
     }
 }
 
+/// A known completion of a state to the target, for BOBA*'s early
+/// solution update: the cost of the completion that is optimal in the
+/// primary objective (ties broken by the secondary one).
+pub(crate) struct Completion<C> {
+    /// Primary cost of the completion, the exact primary distance.
+    pub(crate) primary: C,
+    /// Secondary cost of the same completion.
+    pub(crate) secondary: C,
+    /// `true` if the completion is also optimal in the secondary
+    /// objective, so it dominates every other completion and the state
+    /// need not be expanded.
+    pub(crate) terminal: bool,
+}
+
+/// Completions of states to the target, known before the search runs.
+pub(crate) trait Completions<S, C> {
+    /// The primary-optimal completion of `state`, or `None` if unknown.
+    fn completion(&self, state: &S) -> Option<Completion<C>>;
+
+    /// Appends the states of that completion after `state`, target
+    /// included.
+    fn suffix(&self, state: &S, out: &mut Vec<S>);
+}
+
+/// No known completions: plain BOA*.
+#[derive(Debug, Clone, Copy, Default)]
+pub(crate) struct NoCompletions;
+
+impl<S, C> Completions<S, C> for NoCompletions {
+    fn completion(&self, _state: &S) -> Option<Completion<C>> {
+        None
+    }
+
+    fn suffix(&self, _state: &S, _out: &mut Vec<S>) {}
+}
+
 /// A search label: one path to a state, stored in the node arena.
 struct Node<S, C> {
     /// The state this path ends in.
@@ -273,7 +309,7 @@ struct Node<S, C> {
 ///
 /// Also one direction of BOBA*, which drives two of these step by step and
 /// exchanges their bounds; see [`Search::set_primary_bound`].
-pub(crate) struct Search<'a, G: Graph, H, C, P> {
+pub(crate) struct Search<'a, G: Graph, H, C, P, K = NoCompletions> {
     /// The graph being searched.
     graph: &'a G,
     /// Per-objective lower bounds on the remaining cost.
@@ -305,6 +341,15 @@ pub(crate) struct Search<'a, G: Graph, H, C, P> {
     successors: Vec<(G::State, [C; 2])>,
     /// Effort counters.
     stats: Stats,
+    /// Known completions for the early solution update; [`NoCompletions`]
+    /// outside BOBA*'s own heuristics.
+    completions: K,
+    /// Raised lower bounds on the secondary heuristic per state, from the
+    /// other direction's first expansions (BOBA*'s heuristic tuning).
+    secondary_floor: BTreeMap<G::State, C>,
+    /// The state and primary `g` of the latest first expansion of a state,
+    /// until [`Search::take_first_expansion`] collects it.
+    first_expansion: Option<(G::State, C)>,
 }
 
 impl<'a, G, H, C, P> Search<'a, G, H, C, P>
@@ -314,8 +359,29 @@ where
     C: Cost,
     P: Fn(&G::State) -> bool,
 {
-    /// Creates an empty search with no labels.
+    /// Creates an empty plain BOA* search with no labels.
     pub(crate) fn new(graph: &'a G, heuristic: H, is_goal: P, tolerance: Tolerance<C>) -> Self {
+        Search::with_completions(graph, heuristic, is_goal, tolerance, NoCompletions)
+    }
+}
+
+impl<'a, G, H, C, P, K> Search<'a, G, H, C, P, K>
+where
+    G: Graph<Weight = [C; 2]>,
+    H: Heuristic<G::State, [C; 2]>,
+    C: Cost,
+    P: Fn(&G::State) -> bool,
+    K: Completions<G::State, C>,
+{
+    /// Creates an empty search with no labels that uses `completions` for
+    /// the early solution update.
+    pub(crate) fn with_completions(
+        graph: &'a G,
+        heuristic: H,
+        is_goal: P,
+        tolerance: Tolerance<C>,
+        completions: K,
+    ) -> Self {
         Self {
             graph,
             heuristic,
@@ -329,7 +395,23 @@ where
             solutions: Vec::new(),
             successors: Vec::new(),
             stats: Stats::default(),
+            completions,
+            secondary_floor: BTreeMap::new(),
+            first_expansion: None,
         }
+    }
+
+    /// Raises the secondary heuristic of `state` to at least `floor`, from
+    /// the other direction's first expansion of `state`.
+    pub(crate) fn raise_secondary(&mut self, state: G::State, floor: C) {
+        let entry = self.secondary_floor.entry(state).or_insert(floor);
+        *entry = (*entry).max(floor);
+    }
+
+    /// The state and primary `g` of the latest first expansion of a state
+    /// since the last call, if any.
+    pub(crate) fn take_first_expansion(&mut self) -> Option<(G::State, C)> {
+        self.first_expansion.take()
     }
 
     /// Processes the next label from the open list.
@@ -373,29 +455,80 @@ where
 
     /// Pushes the start label, unless the heuristic reports it as a dead end.
     pub(crate) fn push_start(&mut self, start: G::State) {
-        if let Some(h) = self.heuristic.estimate(&start) {
+        if let Some(h) = self.estimate(&start) {
             self.push(start, [C::ZERO; 2], h, None);
         }
     }
 
+    /// The heuristic estimate of `state`, with the secondary objective
+    /// raised to its tuned floor.
+    fn estimate(&mut self, state: &G::State) -> Option<[C; 2]> {
+        let mut h = self.heuristic.estimate(state)?;
+        if let Some(&floor) = self.secondary_floor.get(state) {
+            h[1] = h[1].max(floor);
+        }
+
+        Some(h)
+    }
+
     /// Handles one label taken from the open list: prune, record a
-    /// solution, or expand.
+    /// solution (early, through a known completion, or at a goal), or
+    /// expand.
     fn process(&mut self, f: [C; 2], index: usize) {
         let node = &self.nodes[index];
         if self.is_dominated(&node.state, node.g[1], f) {
             return;
         }
 
-        let g2 = node.g[1];
-        self.g2_min.insert(node.state.clone(), g2);
+        let (state, g) = (node.state.clone(), node.g);
+        if self.g2_min.insert(state.clone(), g[1]).is_none() {
+            self.first_expansion = Some((state.clone(), g[0]));
+        }
 
-        if (self.is_goal)(&node.state) {
-            self.best_goal_g2 = Some(g2);
+        if let Some(completion) = self.completions.completion(&state) {
+            let cost = [g[0] + completion.primary, g[1] + completion.secondary];
+            if self.best_goal_g2.is_none_or(|best| cost[1] < best) {
+                let solution = self.early_solution(index, cost);
+                self.add_solution(solution);
+            }
+
+            if completion.terminal {
+                return;
+            }
+        }
+
+        if (self.is_goal)(&state) {
             let solution = self.solution(index);
-            self.solutions.push(solution);
+            self.add_solution(solution);
         } else {
             self.expand(index);
         }
+    }
+
+    /// Records a solution; it replaces the last one if both have the same
+    /// first cost (the new one then has the smaller second cost).
+    fn add_solution(&mut self, solution: Solution<G::State, [C; 2]>) {
+        self.best_goal_g2 = Some(solution.cost[1]);
+        if self
+            .solutions
+            .last()
+            .is_some_and(|last| last.cost[0] == solution.cost[0])
+        {
+            self.solutions.pop();
+        }
+
+        self.solutions.push(solution);
+    }
+
+    /// The path of the label at `index` joined with the known completion of
+    /// its state, at total cost `cost`.
+    fn early_solution(&self, index: usize, cost: [C; 2]) -> Solution<G::State, [C; 2]> {
+        let mut solution = self.solution(index);
+        self.completions
+            .suffix(&self.nodes[index].state, &mut solution.path);
+
+        solution.cost = cost;
+        solution
     }
 
     /// Generates the successors of a label and pushes those that survive
@@ -409,7 +542,7 @@ where
             .successors(&self.nodes[index].state, &mut successors);
 
         for (state, weight) in successors.drain(..) {
-            let Some(h) = self.heuristic.estimate(&state) else {
+            let Some(h) = self.estimate(&state) else {
                 continue;
             };
 
