@@ -198,7 +198,8 @@ for sol in &out.solutions {
   Intelligence 314, 2023, 103807.
 - **NAMOA\*:** L. Mandow, J. L. Pérez de la Cruz. "A New Approach to
   Multiobjective A* Search." IJCAI 2005. Also "Multiobjective A* search
-  with consistent heuristics." Journal of the ACM, 2010.
+  with consistent heuristics." Journal of the ACM 57(5), Article 27,
+  2010.
 - **BOBA\*:** S. Ahmadi, G. Tack, D. Harabor, P. Kilby. "Bi-Objective
   Search with Bi-Directional A*." ESA 2021.
 - **NAMOA\*dr:** F.-J. Pulido, L. Mandow, J. L. Pérez de la Cruz.
@@ -224,16 +225,16 @@ for sol in &out.solutions {
 
 The algorithms were first written from memory, then checked line by line
 against the papers' pseudocode: BOA* against the AIJ 2023 version
-(Algorithm 3), NAMOA* against IJCAI 2005 and the JACM-adapted table in
-Pulido's PhD thesis, NAMOA*dr against the thesis (Tables 4.4 and 4.5,
+(Algorithm 3), NAMOA* against IJCAI 2005 and the JACM 2010 paper
+(Table I, Sections 4 and 5), NAMOA*dr against the thesis (Tables 4.4 and 4.5,
 Definition 4.5, eq. 4.9), A*pex against the ICAPS 2022 paper
 (Algorithm 2), EMOA*
 against arXiv 2202.08992 (Algorithms 1 to 3), PP-A* and BOA*ε against
 arXiv 2006.10302v2, and BOBA* against arXiv 2105.11888v2 (Algorithms 1
-and 2). The JACM 2010 NAMOA* paper and Pulido et al. 2015 (C&OR) were
-not reachable: the paperity.org mirror of the JACM paper and the
-ScienceDirect page both answer automated requests with a Cloudflare
-block, so the thesis-based checks stand for those two. Only A*pex needed
+and 2). Pulido et al. 2015 (C&OR) was not reachable (ScienceDirect
+answers automated requests with a Cloudflare block); NAMOA*dr is checked
+against the thesis and against the restatement in Wolff et al. 2026
+(below). Only A*pex needed
 fixes (below). The remaining differences elsewhere are deliberate and
 leave the returned cost vectors unchanged:
 
@@ -242,9 +243,13 @@ leave the returned cost vectors unchanged:
 | all | equal cost vectors add a back pointer (all paths kept) | one path per cost vector | equal vectors are pruned by weak dominance; the output promises one path per vector |
 | BOA* | single goal state, `g2min(s_goal)` | goal predicate, `g2` of the last solution | the last solution has the smallest `g2` and an `f1` no larger than any later label's |
 | BOA* | tie-breaking unspecified | `(f1, f2)`, then arena index | determinism only |
-| NAMOA* | strict dominance `≺` for filtering by `COSTS` | weak dominance | a label whose `f` equals a solution cost can only reach that cost or worse |
-| NAMOA* (2005) | dominated vectors also removed from `Gcl` | `Gcl` keeps them until they are superseded on insertion | anything a removed vector dominates, the vector that dominates it dominates too; memory only |
-| NAMOA* | filtering by `COSTS` eager on `OPEN` | lazy, at selection and at generation | as in the JACM-adapted version |
+| NAMOA* (JACM 2010, Table I step 4) | strict dominance `≺` for filtering by `COSTS` | weak dominance | verified; a label whose `f` equals a solution cost can only reach that cost or worse |
+| NAMOA* (JACM 2010, step 5(b) i; IJCAI 2005) | a new non-dominated `g_m` removes the vectors it dominates from `G_op(m)` and `G_cl(m)` | removed from the open frontier at once; `G_cl` keeps them until a closed vector supersedes them | verified; anything a removed vector dominates, the vector that dominates it dominates too; memory only |
+| NAMOA* (JACM 2010, step 4) | filtering by `COSTS` eager on every `F` in `OPEN`, empty triples removed | lazy, at selection and at generation | verified; a filtered triple is never selected, a lazily dropped one neither |
+| NAMOA* (JACM 2010, step 3) | select any triple with an `f` non-dominated in `OPEN` | the lexicographically smallest `f` | verified; a lexicographic minimum is non-dominated, so this is one admissible choice |
+| NAMOA* (JACM 2010, step 5) | skip successors that close a cycle in `SG`; a `g_m` equal to a known one only adds a back pointer | no cycle test; equal or dominated `g_m` pruned by weak dominance | verified; with non-negative costs a cycle's `g` is weakly dominated by the vector already known at its state |
+| NAMOA* (JACM 2010, Section 2.2.3) | sets `H(n)` of estimates, `F` the non-dominated `g + h` | one estimate per state | verified; the multi-valued case is `namoa_star_dr_mvh_lazy` |
+| NAMOA* (JACM 2010, Theorem 4.3) | termination on infinite graphs needs costs bounded below by `δ > 0` | not checked; documented on `namoa_star` | verified; doc fixed (it only required non-negative costs) |
 | NAMOA*dr | `t`-discard with case split on `v1` | weak dominance on objectives `1..N` | lexicographic order makes the first objective of closed labels and solutions no larger; equality in all objectives is the duplicate case above |
 | EMOA* | AVL tree per frontier | sorted `Vec` (`emoa_star`), treap (`emoa_star_tree`) | same queries; the tree also prunes by subtree bounding boxes |
 | PP-A* | two-sided bounded test, returns `tl` | one-sided (first objective), returns `br` | a different but proven covering; see `pp_a_star` |
@@ -298,7 +303,7 @@ which restates Pulido 2015. No deviation needed a fix.
 
 | Paper rule | Here | Status |
 |---|---|---|
-| MVH: a set of non-dominated vectors per state; admissible and consistent as in Section 2.1 | `MvHeuristic`, sets need not be non-dominated (the lazy search sorts and dedups, the eager one tolerates redundancy); `SingleValued` wraps a `Heuristic` | matches |
+| MVH: a set of non-dominated vectors per state; admissible and consistent as in Section 2.1 | `MvHeuristic`, sets need not be non-dominated (the lazy search sorts and dedups, the eager one tolerates redundancy); `SingleValued` wraps a `Heuristic` | matches. Consistency follows Wolff et al. (`∀h ∈ H(s) ∃h' ∈ H(s')`); JACM 2010 Definition 5.7 calls the other quantifier order (`∀h' ∃h`) monotone, which NAMOA*dr-mvh does not rely on |
 | Naive DR with an MVH is unsound (Lemma 1, Figure 2, Tables 1 and 2) | unit test `naive_dimensionality_reduction_loses_a_solution` runs the lazy search with the order check off and loses `(16, 12)`; `tests/it/mvh.rs` runs the same graph through both searches and NAMOA* | matches |
 | NAMOA*dr-mvh: one node per `(g, h)`, successors only for `h ⪯ c + h'` (Definition 1), closed sets per `(s, h)` (Theorem 1) | NAMOA*dr's engine on the graph of `(state, estimate)` pairs, whose single-valued heuristic is consistent by construction; a virtual root fans out to one label per start estimate | matches; the engine's open frontier is per pair |
 | L-NAMOA*dr-mvh: one node per path, `ChooseH` binds the lexicographically smallest estimate not discarded by solutions (lines 26, 34 to 40) | same | matches |

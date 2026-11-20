@@ -3,7 +3,7 @@
 //!
 //! Mandow, Pérez de la Cruz: "A New Approach to Multiobjective A* Search",
 //! IJCAI 2005; "Multiobjective A* search with consistent heuristics",
-//! Journal of the ACM, 2010. Pulido, Mandow, Pérez de la Cruz:
+//! Journal of the ACM 57(5), 2010. Pulido, Mandow, Pérez de la Cruz:
 //! "Dimensionality reduction in multiobjective shortest path search",
 //! Computers & Operations Research, 2015.
 //!
@@ -34,7 +34,16 @@ use crate::pareto::{Front, TruncatedFront};
 /// - edge costs are non-negative;
 /// - `heuristic` is admissible in every objective: it never overestimates
 ///   the cost to the nearest goal, and so is zero on every goal. It need
-///   not be consistent.
+///   not be consistent;
+/// - the graph is finite, or every edge costs at least some fixed `δ > 0`
+///   in every objective. Otherwise the search may not terminate on an
+///   infinite implicit graph (Mandow and Pérez de la Cruz 2010, Theorem
+///   4.3, assumption 3).
+///
+/// With these, the result is the full Pareto-optimal set (Theorem 4.9),
+/// and every solution recorded along the way is already Pareto-optimal
+/// (Corollary 4.7). With a consistent heuristic, only paths that are
+/// non-dominated at their state are expanded (Theorem 5.8).
 ///
 /// With [`ZeroHeuristic`](crate::ZeroHeuristic) this is the multi-objective
 /// label-setting algorithm (Martins 1984). Solutions are sorted
