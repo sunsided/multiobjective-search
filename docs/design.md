@@ -178,7 +178,9 @@ for sol in &out.solutions {
 ```
 
 - One free function per algorithm: `boa_star`, `boa_star_approx`,
-  `boba_star`, `namoa_star`, `namoa_star_dr`, `emoa_star`, `brute_force`. A builder or config struct only once there are
+  `boa_star_eps`, `pp_a_star`, `boba_star`, `boba_star_with`,
+  `namoa_star`, `namoa_star_dr`, `emoa_star`, `emoa_star_tree`,
+  `brute_force`. A builder or config struct only once there are
   options (time limits, solution limits, ε).
 - Goal is a predicate, so a goal set works. BOBA* needs a single goal state
   and gets its own signature.
@@ -193,7 +195,7 @@ for sol in &out.solutions {
   S. Koenig, O. Salzman. "A Simple and Fast Bi-Objective Search
   Algorithm." ICAPS 2020. Journal version: "Simple and efficient
   bi-objective search algorithms via fast dominance checks." Artificial
-  Intelligence, 2023.
+  Intelligence 314, 2023, 103807.
 - **NAMOA\*:** L. Mandow, J. L. Pérez de la Cruz. "A New Approach to
   Multiobjective A* Search." IJCAI 2005. Also "Multiobjective A* search
   with consistent heuristics." Journal of the ACM, 2010.
@@ -202,7 +204,7 @@ for sol in &out.solutions {
 - **NAMOA\*dr:** F.-J. Pulido, L. Mandow, J. L. Pérez de la Cruz.
   "Dimensionality reduction in multiobjective shortest path search."
   Computers & Operations Research, 2015.
-- **BOA\*ε and PP-A\* (multiplicative, not implemented):** B. Goldin,
+- **BOA\*ε and PP-A\*:** B. Goldin,
   O. Salzman. "Approximate bi-criteria search by efficient representation
   of subsets of the Pareto-optimal frontier." ICAPS 2021 (arXiv
   2006.10302).
@@ -210,8 +212,31 @@ for sol in &out.solutions {
   "Enhanced Multi-Objective A* Using Balanced Binary Search Trees." SoCS
   2022.
 
-BOBA* was checked against the arXiv version (2105.11888v2). The other
-citations are from memory; check venue and year before 0.1.0.
+### Verification against the papers
+
+The algorithms were first written from memory, then checked line by line
+against the papers' pseudocode: BOA* against the AIJ 2023 version
+(Algorithm 3), NAMOA* against IJCAI 2005 and the JACM-adapted table in
+Pulido's PhD thesis (the JACM paper itself was not accessible), NAMOA*dr
+against the thesis (Tables 4.4 and 4.5, Definition 4.5, eq. 4.9), EMOA*
+against arXiv 2202.08992 (Algorithms 1 to 3), PP-A* and BOA*ε against
+arXiv 2006.10302v2, and BOBA* against arXiv 2105.11888v2 (Algorithms 1
+and 2). No behavioural deviation needed a fix. The remaining differences
+are deliberate and leave the returned cost vectors unchanged:
+
+| Algorithm | Paper | Here | Why the cost vectors do not change |
+|---|---|---|---|
+| all | equal cost vectors add a back pointer (all paths kept) | one path per cost vector | equal vectors are pruned by weak dominance; the output promises one path per vector |
+| BOA* | single goal state, `g2min(s_goal)` | goal predicate, `g2` of the last solution | the last solution has the smallest `g2` and an `f1` no larger than any later label's |
+| BOA* | tie-breaking unspecified | `(f1, f2)`, then arena index | determinism only |
+| NAMOA* | strict dominance `≺` for filtering by `COSTS` | weak dominance | a label whose `f` equals a solution cost can only reach that cost or worse |
+| NAMOA* (2005) | dominated vectors also removed from `Gcl` | `Gcl` keeps them until they are superseded on insertion | anything a removed vector dominates, the vector that dominates it dominates too; memory only |
+| NAMOA* | filtering by `COSTS` eager on `OPEN` | lazy, at selection and at generation | as in the JACM-adapted version |
+| NAMOA*dr | `t`-discard with case split on `v1` | weak dominance on objectives `1..N` | lexicographic order makes the first objective of closed labels and solutions no larger; equality in all objectives is the duplicate case above |
+| EMOA* | AVL tree per frontier | sorted `Vec` (`emoa_star`), treap (`emoa_star_tree`) | same queries; the tree also prunes by subtree bounding boxes |
+| PP-A* | two-sided bounded test, returns `tl` | one-sided (first objective), returns `br` | a different but proven covering; see `pp_a_star` |
+| BOBA* | preliminary searches in parallel threads | sequential | same distances |
+| BOBA* | early solution update, heuristic tuning | not implemented | speed only |
 
 ## Testing strategy
 
