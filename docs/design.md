@@ -315,7 +315,9 @@ which restates Pulido 2015. No deviation needed a fix.
 | `LocalDomCheck`: truncated check, trusted only if `max g'_1 ≤ g_1`, else full check against `G_cl(s)` (lines 41 to 47) | same; the maximum is over every `g_1` ever closed at the state | deliberate: can only fall back more often |
 | Global check against `Tr` of solutions | same (`TruncatedFront`) | matches; sound although labels leave the open list out of `f_1` order, because Pareto-optimal solutions are still found in lexicographic order (see `namoa_star_dr_mvh_lazy`) |
 | Single goal | goal predicate | deliberate, as everywhere in the crate |
-| MVH construction by backward A*pex and a Bellman-Ford consistency fix (Section 6) | not implemented; tests use exact Pareto sets (consistent) and weakened ones (admissible), the bench the exact and halved sets of a grid | open |
+| A*pex-MVH: backward A*pex from the goal, the apexes per state (Section 6) | `apex_mvh` on a `ReverseGraph`: A*pex (greedy merges) on the reversed graph from the goal set, no goal, zero heuristic; the estimates are the full apexes of the pairs expanded at each state | matches; tested exact for `ε = 0` and admissible against exact Pareto sets otherwise |
+| Consistency fix: while `c(s, s') + h' ≺ h` for some `h ∈ H(s)`, insert `c + h'` into `H(s)` and drop what it dominates, to a fix-point | `MvhTable::make_consistent`: insert `c + h'` whenever no estimate of `s` weakly dominates it, worklist over predecessors | deliberate: the paper's trigger alone does not give the monotone form NAMOA*dr-mvh needs (an uncovered but incomparable `c + h'` stays); tested monotone, admissible and `{0}` at goals |
+| Querying the MVH | the eager variant asks the MVH on every generation | not cached: with table MVHs a cache would be the same map lookup and copy |
 
 ### A-BOA*ε against the anonymous preprint
 

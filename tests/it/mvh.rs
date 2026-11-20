@@ -3,8 +3,8 @@
 //! reference with consistent and with merely admissible MVHs.
 
 use multiobjective_search::{
-    Graph, Output, SingleValued, heuristic_fn, mv_heuristic_fn, namoa_star, namoa_star_dr_mvh,
-    namoa_star_dr_mvh_lazy,
+    Epsilon, Graph, MvhTable, Output, SingleValued, apex_mvh, heuristic_fn, mv_heuristic_fn,
+    namoa_star, namoa_star_dr_mvh, namoa_star_dr_mvh_lazy,
 };
 use proptest::prelude::*;
 
@@ -197,6 +197,83 @@ fn check_all<const N: usize>(problem: &Problem<N>, kind: &[u8]) -> Result<(), Te
         &namoa_star_dr_mvh_lazy(graph, single(), start, goal),
     )?;
     check(problem, &namoa_star_dr_mvh(graph, single(), start, goal))
+}
+
+/// The table as a vector indexed by node.
+fn to_sets<const N: usize>(
+    problem: &Problem<N>,
+    table: &MvhTable<usize, u32, N>,
+) -> Vec<Vec<[u32; N]>> {
+    (0..problem.graph.nodes)
+        .map(|v| table.get(&v).to_vec())
+        .collect()
+}
+
+/// Returns `true` if every exact estimate of every state is weakly
+/// dominated by one of `sets`.
+fn is_admissible<const N: usize>(exact: &[Vec<[u32; N]>], sets: &[Vec<[u32; N]>]) -> bool {
+    exact.iter().zip(sets).all(|(exact, set)| {
+        exact
+            .iter()
+            .all(|e| set.iter().any(|h| (0..N).all(|i| h[i] <= e[i])))
+    })
+}
+
+/// Backward A*pex MVHs: exact for zero tolerances, admissible otherwise,
+/// and after the consistency fix monotone and still admissible. The lazy
+/// search is exact with the A*pex table, the eager one with the fixed one.
+fn check_built<const N: usize>(
+    problem: &Problem<N>,
+    eps: [Epsilon; N],
+) -> Result<(), TestCaseError> {
+    let goals: Vec<usize> = (0..problem.graph.nodes)
+        .filter(|&v| problem.goals[v])
+        .collect();
+    let exact = exact_mvh(problem);
+
+    let zero = apex_mvh(&problem.graph, goals.iter().copied(), [Epsilon::ZERO; N]);
+    prop_assert_eq!(to_sets(problem, &zero), exact.clone());
+
+    let mut table = apex_mvh(&problem.graph, goals.iter().copied(), eps);
+    let built = to_sets(problem, &table);
+    prop_assert!(is_admissible(&exact, &built));
+    check_mvh(problem, &built, false)?;
+
+    table.make_consistent(&problem.graph);
+    let fixed = to_sets(problem, &table);
+    prop_assert!(is_admissible(&exact, &fixed));
+    prop_assert!(is_monotone(&problem.graph.edges, &fixed));
+    for (v, set) in fixed.iter().enumerate() {
+        if problem.goals[v] {
+            prop_assert_eq!(set, &vec![[0; N]]);
+        }
+    }
+
+    check_mvh(problem, &fixed, true)
+}
+
+/// A strategy for tolerances `num / den` up to 300 %, zero included.
+fn epsilon() -> impl Strategy<Value = Epsilon> {
+    (0..=3_u32, 1..=4_u32).prop_map(|(num, den)| Epsilon::new(num, den))
+}
+
+proptest! {
+    /// Built MVHs, two to four objectives, on scaled costs so that the
+    /// tolerances merge paths.
+    #[test]
+    fn built_mvhs(p2 in problems::<2>(), p3 in problems::<3>(), e2 in prop::array::uniform(epsilon()), e3 in prop::array::uniform(epsilon())) {
+        check_built(&scaled(p2), e2)?;
+        check_built(&scaled(p3), e3)?;
+    }
+}
+
+/// `problem` with every edge cost scaled to `25 c + 1`.
+fn scaled<const N: usize>(mut problem: Problem<N>) -> Problem<N> {
+    for edge in &mut problem.graph.edges {
+        edge.2 = edge.2.map(|c| c * 25 + 1);
+    }
+
+    problem
 }
 
 proptest! {

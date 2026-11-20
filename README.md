@@ -34,7 +34,8 @@ reference on random graphs with two to four objectives:
 - [x] Multi-valued heuristics (`MvHeuristic`, `SingleValued`, `mv_heuristic_fn`)
       with NAMOA\*dr-mvh (`namoa_star_dr_mvh`, consistent MVHs) and the lazy
       L-NAMOA\*dr-mvh (`namoa_star_dr_mvh_lazy`, admissible MVHs), Wolff,
-      Felner, Salzman 2026
+      Felner, Salzman 2026; MVHs built by backward A*pex (`apex_mvh`, `MvhTable`)
+      and made consistent by a Bellman-Ford fix (`MvhTable::make_consistent`)
 - [x] EMOA\* with the paper's balanced-tree frontiers (`emoa_star_tree`,
       `TreeFront`): a treap with per-subtree bounding boxes, cross-checked
       against the `Vec` frontier; slower than the `Vec` on the crate's

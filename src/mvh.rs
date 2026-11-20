@@ -1,8 +1,12 @@
 //! Multi-valued heuristics: a set of cost-to-go estimates per state.
 
+mod table;
+
 use alloc::vec::Vec;
 
 use search_core::Heuristic;
+
+pub use table::{MvhTable, apex_mvh};
 
 /// A multi-valued heuristic (MVH): for every state, a set of cost vectors
 /// that bound the remaining cost to a goal from below.

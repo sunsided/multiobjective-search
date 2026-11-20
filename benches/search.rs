@@ -7,10 +7,10 @@ use std::hint::black_box;
 use criterion::Criterion;
 use multiobjective_search::{
     Epsilon, Front, Graph, MvHeuristic, ReverseGraph, RoadGraph, SingleValued, TreeFront,
-    WeightedSum, ZeroHeuristic, apex_star, boa_star, boa_star_anytime, boa_star_anytime_basic,
-    boa_star_anytime_ws, boa_star_eps, boba_star, emoa_star, emoa_star_tree, heuristic_fn,
-    mv_heuristic_fn, namoa_star, namoa_star_dr, namoa_star_dr_mvh, namoa_star_dr_mvh_lazy,
-    pp_a_star,
+    WeightedSum, ZeroHeuristic, apex_mvh, apex_star, boa_star, boa_star_anytime,
+    boa_star_anytime_basic, boa_star_anytime_ws, boa_star_eps, boba_star, emoa_star,
+    emoa_star_tree, heuristic_fn, mv_heuristic_fn, namoa_star, namoa_star_dr, namoa_star_dr_mvh,
+    namoa_star_dr_mvh_lazy, pp_a_star,
 };
 
 /// Runs every benchmark in this file with criterion's command-line flags.
@@ -307,6 +307,43 @@ fn bench_multi_valued(c: &mut Criterion) {
     group.bench_function("eager_exact", |b| {
         b.iter(|| namoa_star_dr_mvh(&grid, table(&exact), black_box(0), is_goal));
     });
+
+    // Wolff et al.'s constructions: backward A*pex (admissible, "A") and
+    // its consistency fix ("C"), at two tolerances.
+    for (name, eps) in [
+        ("10pct", Epsilon::new(1, 10)),
+        ("50pct", Epsilon::new(1, 2)),
+    ] {
+        let built = apex_mvh(&grid, [goal], [eps; 3]);
+        let mut fixed = built.clone();
+        fixed.make_consistent(&grid);
+        println!(
+            "apex_mvh {name}: {} estimates, {} after the fix",
+            built.size(),
+            fixed.size()
+        );
+
+        group.bench_function(format!("build_apex_{name}"), |b| {
+            b.iter(|| apex_mvh(&grid, [black_box(goal)], [eps; 3]));
+        });
+        group.bench_function(format!("build_fixed_{name}"), |b| {
+            b.iter(|| {
+                let mut table = apex_mvh(&grid, [black_box(goal)], [eps; 3]);
+                table.make_consistent(&grid);
+                table
+            });
+        });
+        group.bench_function(format!("lazy_apex_{name}"), |b| {
+            b.iter(|| namoa_star_dr_mvh_lazy(&grid, &built, black_box(0), is_goal));
+        });
+        group.bench_function(format!("lazy_fixed_{name}"), |b| {
+            b.iter(|| namoa_star_dr_mvh_lazy(&grid, &fixed, black_box(0), is_goal));
+        });
+        group.bench_function(format!("eager_fixed_{name}"), |b| {
+            b.iter(|| namoa_star_dr_mvh(&grid, &fixed, black_box(0), is_goal));
+        });
+    }
+
     group.finish();
 }
 

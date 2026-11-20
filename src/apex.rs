@@ -47,7 +47,7 @@ use search_core::{Cost, Heuristic, WideMul};
 
 use crate::cost::add;
 use crate::epsilon::Epsilon;
-use crate::graph::Graph;
+use crate::graph::{Graph, ZeroHeuristic};
 use crate::output::{Output, Solution, Stats};
 use crate::pareto::{Front, TruncatedFront};
 
@@ -193,25 +193,9 @@ where
     C: Cost + WideMul,
     P: Fn(&G::State) -> bool,
 {
-    let mut search = Search {
-        graph,
-        heuristic,
-        is_goal,
-        eps,
-        rule,
-        paths: Vec::new(),
-        pairs: Vec::new(),
-        open: BinaryHeap::new(),
-        states: BTreeMap::new(),
-        solutions: Vec::new(),
-        successors: Vec::new(),
-        stats: Stats::default(),
-    };
-
+    let mut search = Search::new(graph, heuristic, is_goal, eps, rule, false);
     search.push_start(start);
-    while let Some(Reverse((f, index))) = search.open.pop() {
-        search.process(f, index);
-    }
+    search.run();
 
     search.into_output()
 }
@@ -248,6 +232,9 @@ struct StateInfo<C, const N: usize> {
     closed: TruncatedFront<C, N>,
     /// Pair arena indices of this state's pairs on the open list.
     open: Vec<usize>,
+    /// Full apexes of the pairs expanded here; only filled when the search
+    /// records them.
+    expanded: Front<C, N>,
 }
 
 /// Mutable state of one A*pex run.
@@ -276,17 +263,86 @@ struct Search<'a, G: Graph, H, C, P, const N: usize> {
     solutions: Vec<Pair<C, N>>,
     /// Reused successor buffer, empty between expansions.
     successors: Vec<(G::State, [C; N])>,
+    /// Whether [`StateInfo::expanded`] is filled, for
+    /// [`expanded_apexes`].
+    record: bool,
     /// Effort counters.
     stats: Stats,
 }
 
-impl<G, H, C, P, const N: usize> Search<'_, G, H, C, P, N>
+/// Runs A*pex from every state in `starts` with no goal and the zero
+/// heuristic, and returns, per reached state, the non-dominated apexes of
+/// the pairs expanded there.
+///
+/// Every path from a start to a state `s` has a cost weakly dominated by
+/// one of `s`'s apexes (case 1 of the paper's Lemma 4; with no goal the
+/// solution case never applies), and the apexes are within the tolerances
+/// of real path costs. This is how Wolff et al. (arXiv 2606.20644,
+/// Section 6) build a multi-valued heuristic, on the reversed graph.
+pub(crate) fn expanded_apexes<G, C, const N: usize>(
+    graph: &G,
+    starts: impl IntoIterator<Item = G::State>,
+    eps: [Epsilon; N],
+) -> BTreeMap<G::State, Front<C, N>>
+where
+    G: Graph<Weight = [C; N]>,
+    C: Cost + WideMul,
+{
+    let never = |_: &G::State| false;
+    let mut search = Search::new(graph, ZeroHeuristic, never, eps, MergeRule::Greedy, true);
+    for start in starts {
+        search.push_start(start);
+    }
+
+    search.run();
+    search
+        .states
+        .into_iter()
+        .filter(|(_, info)| !info.expanded.is_empty())
+        .map(|(state, info)| (state, info.expanded))
+        .collect()
+}
+
+impl<'a, G, H, C, P, const N: usize> Search<'a, G, H, C, P, N>
 where
     G: Graph<Weight = [C; N]>,
     H: Heuristic<G::State, [C; N]>,
     C: Cost + WideMul,
     P: Fn(&G::State) -> bool,
 {
+    /// Creates an empty search; `record` fills [`StateInfo::expanded`].
+    fn new(
+        graph: &'a G,
+        heuristic: H,
+        is_goal: P,
+        eps: [Epsilon; N],
+        rule: MergeRule,
+        record: bool,
+    ) -> Self {
+        Self {
+            graph,
+            heuristic,
+            is_goal,
+            eps,
+            rule,
+            paths: Vec::new(),
+            pairs: Vec::new(),
+            open: BinaryHeap::new(),
+            states: BTreeMap::new(),
+            solutions: Vec::new(),
+            successors: Vec::new(),
+            record,
+            stats: Stats::default(),
+        }
+    }
+
+    /// Processes pairs until the open list is empty.
+    fn run(&mut self) {
+        while let Some(Reverse((f, index))) = self.open.pop() {
+            self.process(f, index);
+        }
+    }
+
     /// Pushes the start pair, unless the heuristic reports a dead end.
     fn push_start(&mut self, start: G::State) {
         if let Some(h) = self.heuristic.estimate(&start) {
@@ -314,7 +370,12 @@ where
             return;
         }
 
-        self.info_mut(&state).closed.insert(pair.apex);
+        let record = self.record;
+        let info = self.info_mut(&state);
+        info.closed.insert(pair.apex);
+        if record {
+            info.expanded.insert(pair.apex);
+        }
 
         if (self.is_goal)(&state) {
             self.insert_solution(pair);
@@ -529,6 +590,7 @@ where
             .or_insert_with(|| StateInfo {
                 closed: TruncatedFront::new(),
                 open: Vec::new(),
+                expanded: Front::new(),
             })
     }
 

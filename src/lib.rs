@@ -96,7 +96,7 @@ pub use dimacs::{DimacsError, DimacsErrorKind, RoadGraph};
 pub use emoa::{emoa_star, emoa_star_tree};
 pub use epsilon::Epsilon;
 pub use graph::{Graph, ReverseGraph, ZeroHeuristic};
-pub use mvh::{MvHeuristic, MvHeuristicFn, SingleValued, mv_heuristic_fn};
+pub use mvh::{MvHeuristic, MvHeuristicFn, MvhTable, SingleValued, apex_mvh, mv_heuristic_fn};
 pub use namoa::{namoa_star, namoa_star_dr};
 pub use namoa_mvh::{namoa_star_dr_mvh, namoa_star_dr_mvh_lazy};
 pub use output::{Output, Solution, Stats};
