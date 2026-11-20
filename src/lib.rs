@@ -30,6 +30,7 @@
 //! | [`constrained_shortest_path`] | 2 | consistent | Cheapest path with the second cost within a budget. |
 //! | [`two_phase`] | 2 | consistent | Two-phase method: supported solutions by weighted sums ([`supported_solutions`]), then the rest. |
 //! | [`ReferencePoint`] | any `N` | admissible | Interactive: non-dominated solutions by Chebyshev distance to a movable reference point. |
+//! | [`fptas_constrained`] | 2 | none | FPTAS for the constrained shortest path: polynomially many labels, first cost within `1 + ε`. |
 //! | [`ranking`] | 2 | consistent | The classic ranking method: loopless paths by first cost. |
 //! | [`brute_force`] | any `N` | none | Exhaustive reference for tests on small graphs. |
 //!
@@ -87,6 +88,7 @@ mod dimacs;
 mod emoa;
 mod encode;
 mod epsilon;
+mod fptas;
 mod frontier_search;
 mod graph;
 mod mvh;
@@ -121,6 +123,7 @@ pub use dimacs::{DimacsError, DimacsErrorKind, RoadGraph};
 pub use emoa::{emoa_star, emoa_star_tree};
 pub use encode::{KnapsackGraph, LabelCount};
 pub use epsilon::Epsilon;
+pub use fptas::fptas_constrained;
 pub use graph::{Graph, ReverseGraph, ZeroHeuristic};
 pub use mvh::{MvHeuristic, MvHeuristicFn, MvhTable, SingleValued, apex_mvh, mv_heuristic_fn};
 pub use namoa::{namoa_star, namoa_star_dr};

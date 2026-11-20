@@ -513,3 +513,37 @@ proptest! {
         prop_assert_eq!(costs, front);
     }
 }
+
+proptest! {
+    /// The FPTAS stays within the budget and within `1 + ε` of the exact
+    /// constrained optimum, and is exact for `ε = 0`.
+    #[test]
+    fn fptas_within_tolerance(p in problems::<2>(), budget in 0..=40_u32, num in 0..=3_u32, den in 1..=4_u32) {
+        let p = scaled2(p);
+        let goal = |v: &usize| p.goals[*v];
+        let mut stats = Stats::default();
+        let exact = constrained_shortest_path(&p.graph, ZeroHeuristic, p.start, goal, budget, &mut stats);
+        let eps = multiobjective_search::Epsilon::new(num, den);
+        let approx = multiobjective_search::fptas_constrained(&p.graph, p.start, goal, budget, eps, &mut stats);
+
+        prop_assert_eq!(exact.is_some(), approx.is_some());
+        if let (Some(exact), Some(approx)) = (exact, approx) {
+            prop_assert!(approx.cost[1] <= budget);
+            prop_assert!(u64::from(den) * u64::from(approx.cost[0]) <= u64::from(den + num) * u64::from(exact.cost[0]));
+            if num == 0 {
+                prop_assert_eq!(approx.cost[0], exact.cost[0]);
+            }
+
+            check_paths(&p, &multiobjective_search::Output { solutions: vec![approx], stats })?;
+        }
+    }
+}
+
+/// Costs scaled to `5 c + 1`, so that tolerances merge labels.
+fn scaled2(mut problem: Problem<2>) -> Problem<2> {
+    for edge in &mut problem.graph.edges {
+        edge.2 = edge.2.map(|c| c * 5 + 1);
+    }
+
+    problem
+}
