@@ -74,7 +74,7 @@ mod pareto;
 mod pp_a;
 mod reference;
 
-pub use apex::apex_star;
+pub use apex::{MergeRule, apex_star, apex_star_with};
 pub use boa::{boa_star, boa_star_approx, boa_star_eps};
 pub use boba::{boba_star, boba_star_with};
 #[cfg(feature = "parallel")]

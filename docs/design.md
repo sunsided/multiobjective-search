@@ -266,7 +266,7 @@ the current code.
 | `GTcl(s)` gets `Tr(f(AP))` before the goal test (line 9) | same | matches |
 | Child: apex `A + c`, representative extended by the edge (line 14), checked by `is_dominated` before insertion (line 15) | same | matches |
 | ε-bounded: `f(π) ⪯ε f(AP)` (Contribution 3) | `is_bounded`: `g(rep) + h ≤ (1 + ε)(apex + h)` | aligned (was `g(rep) ≤ (1 + ε) apex`, sound but merged less); test `merges_under_the_f_based_bound` |
-| Merge: component-wise minimum apex, representative by method R, L or G; no merge if the choice is not bounded | method L: lexicographically smaller reverse `g`, first argument on a tie | deliberate deviation from G (the paper's best): G compares ratios `f_i(π) / f_i(AP)`, and `Cost` has neither division nor cost-by-cost products. The old code took the first bounded of the two (new, then open); the rustdoc example changed accordingly |
+| Merge: component-wise minimum apex, representative by method R, L or G; no merge if the choice is not bounded | `MergeRule::Greedy` (default): G, the larger slack `min_i (1 + ε_i − f_i(π)/f_i(AP)) / ε_i`, compared as the smaller worst excess `d_i (f_i(π) − f_i(AP)) / (n_i f_i(AP))` by exact cross-multiplication (`search_core::WideMul`); objectives where `f_i(π) = f_i(AP)` have the full slack 1 and are skipped, which also covers `ε_i = 0` and `f_i(AP) = 0`; the new pair's representative wins a tie. `MergeRule::ReverseLex`: L, first argument on a tie. R is not offered | matches (G and L). Both are cross-checked against brute force by the same proptests. The first draft took the first bounded of the two (new, then open). Bench `grid_8x8_3obj/apex_star_10pct`: L 290 µs, G 259 µs |
 | `insert` merges into the first pair of the list it merges with, else adds (lines 27-35) | same, over the open pairs at the state | matches |
 | Goal pair: `insert(AP, solutions)` (line 11) | `insert_solution` | aligned (goal pairs were appended unmerged, so the output was larger than the paper's); test `merges_goal_pairs_into_solutions` |
 | Single goal state | goal predicate; solution pairs at different goals may merge | deliberate: solution pairs are never extended and `h = 0` at every goal, so the merged representative still covers both apexes |
@@ -325,6 +325,9 @@ loader yet.
 
 None for milestone 1. Later:
 
+- `apex_star` needs `search_core::WideMul` (search-core `draft/initial`,
+  "Add WideMul, an exact cost-by-cost product") for the greedy merge rule.
+
 - Consumers (miniplan, a future `heuristic-search`) implement `Graph` and
   `Heuristic` for their models. If `heuristic-search` defines a
   single-objective successor trait with the same shape, both may move to
@@ -346,7 +349,3 @@ None for milestone 1. Later:
 - BOBA*'s preliminary searches run one after another. The paper runs
   them two at a time in threads; a `std` feature could add that.
 - Should `brute_force` stay public or move to the tests? Draft: public.
-- A*pex uses the paper's L merge method. The G method, the paper's
-  fastest, needs exact slack-ratio comparisons, which `Cost` cannot do;
-  it would need a cost-by-cost product (or a widening conversion) in
-  `search-core`. Draft: L.

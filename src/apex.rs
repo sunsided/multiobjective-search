@@ -15,8 +15,8 @@
 //! additions:
 //!
 //! - a new pair merges into an open pair at the same state when the merged
-//!   pair (component-wise minimum apex, the representative with the
-//!   lexicographically smaller reverse cost) is ε-bounded;
+//!   pair (component-wise minimum apex, a representative chosen by a
+//!   [`MergeRule`]) is ε-bounded;
 //! - a goal pair merges into a solution pair the same way;
 //! - a pair is dropped when some solution's representative is within the
 //!   tolerances of its `f` in objectives `1..N`. That solution's apex then
@@ -35,24 +35,40 @@
 //!
 //! Differences from the paper, which keep its guarantee: a goal predicate
 //! replaces the single goal, so solution pairs at different goal states
-//! may merge (they are never extended, and `h = 0` at every goal); the
-//! representative is chosen by the paper's L method rather than its G
-//! (greedy slack) method, because [`Cost`] has no division or cost-by-cost
-//! product to compare the slack ratios exactly; and dominated or duplicate
-//! representatives are dropped from the output.
+//! may merge (they are never extended, and `h = 0` at every goal); and
+//! dominated or duplicate representatives are dropped from the output.
 
 use alloc::collections::{BTreeMap, BinaryHeap};
 use alloc::vec::Vec;
 use core::cmp::Reverse;
 use core::mem;
 
-use search_core::{Cost, Heuristic};
+use search_core::{Cost, Heuristic, WideMul};
 
 use crate::cost::add;
 use crate::epsilon::Epsilon;
 use crate::graph::Graph;
 use crate::output::{Output, Solution, Stats};
 use crate::pareto::{Front, TruncatedFront};
+
+/// How [`apex_star_with`] picks the representative path when it merges two
+/// apex-path pairs. Both are the paper's; the choice never affects the
+/// guarantee, only how many pairs merge.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub enum MergeRule {
+    /// The paper's G method, the one its experiments favour: of the two representatives that
+    /// keep the merged pair ε-bounded, take the one with the larger slack
+    /// `min_i (1 + ε_i - f_i(π) / f_i(A)) / ε_i`, which leaves the most room
+    /// for later merges. The first pair's representative wins a tie.
+    /// Compared exactly by cross-multiplication with [`WideMul`].
+    #[default]
+    Greedy,
+    /// The paper's L method: take the representative whose cost is
+    /// lexicographically smaller read from the last objective to the first
+    /// (the first pair's on a tie), and do not merge if it is not
+    /// ε-bounded. For two objectives this is PP-A*'s bottom-right path.
+    ReverseLex,
+}
 
 /// A*pex: finds a set of solutions that covers the Pareto-optimal front
 /// within a factor `1 + eps[i]` in each objective `i`, for any number of
@@ -70,10 +86,9 @@ use crate::pareto::{Front, TruncatedFront};
 /// - the returned solutions are real paths with their exact costs, mutually
 ///   non-dominated and sorted lexicographically ascending; they need not be
 ///   Pareto-optimal themselves;
-/// - when two pairs merge, the representative is the one whose cost is
-///   lexicographically smaller read from the last objective to the first
-///   (the paper's L method), and the pairs stay apart if that one is not
-///   ε-bounded by the merged apex;
+/// - when two pairs merge, the representative is chosen by the paper's
+///   greedy G method ([`MergeRule::Greedy`]); [`apex_star_with`] selects
+///   another rule;
 /// - `eps = [Epsilon::ZERO; N]` returns exactly the cost vectors of
 ///   [`emoa_star`](crate::emoa_star).
 ///
@@ -112,8 +127,8 @@ use crate::pareto::{Front, TruncatedFront};
 /// let eps = [Epsilon::new(1, 10); 3];
 /// let out = apex_star(&Routes, ZeroHeuristic, 0, |s| *s == 1, eps);
 /// let costs: Vec<_> = out.solutions.iter().map(|s| s.cost).collect();
-/// // [100, 100, 50] has the lexicographically smaller reverse cost, so it
-/// // represents the pair merged with [104, 98, 51] and covers it.
+/// // [100, 100, 50] leaves the merged apex [100, 98, 50] more slack than
+/// // [104, 98, 51], so it represents the merged pair and covers both.
 /// assert_eq!(costs, [[50, 200, 100], [100, 100, 50]]);
 /// ```
 pub fn apex_star<G, H, C, P, const N: usize>(
@@ -126,7 +141,56 @@ pub fn apex_star<G, H, C, P, const N: usize>(
 where
     G: Graph<Weight = [C; N]>,
     H: Heuristic<G::State, [C; N]>,
-    C: Cost,
+    C: Cost + WideMul,
+    P: Fn(&G::State) -> bool,
+{
+    apex_star_with(graph, heuristic, start, is_goal, eps, MergeRule::Greedy)
+}
+
+/// [`apex_star`] with a chosen [`MergeRule`] for the representative of
+/// merged pairs.
+///
+/// Requirements and guarantees are those of [`apex_star`], for every rule.
+///
+/// # Examples
+///
+/// ```
+/// use multiobjective_search::{Epsilon, Graph, MergeRule, ZeroHeuristic, apex_star_with};
+///
+/// /// Two routes from 0 to 1 that merge within 50 %.
+/// struct Routes;
+///
+/// impl Graph for Routes {
+///     type State = u8;
+///     type Weight = [u32; 2];
+///
+///     fn successors(&self, state: &u8, out: &mut Vec<(u8, [u32; 2])>) {
+///         if *state == 0 {
+///             out.extend([(1, [10, 13]), (1, [14, 10])]);
+///         }
+///     }
+/// }
+///
+/// let eps = [Epsilon::new(1, 2); 2];
+/// let run = |rule| apex_star_with(&Routes, ZeroHeuristic, 0, |s| *s == 1, eps, rule);
+/// // Against the merged apex [10, 10], [10, 13] is 30 % over in one
+/// // objective and [14, 10] is 40 % over: the greedy rule keeps the first.
+/// assert_eq!(run(MergeRule::Greedy).solutions[0].cost, [10, 13]);
+/// // The reverse-lexicographic rule prefers the smaller last objective.
+/// assert_eq!(run(MergeRule::ReverseLex).solutions[0].cost, [14, 10]);
+/// ```
+pub fn apex_star_with<G, H, C, P, const N: usize>(
+    graph: &G,
+    heuristic: H,
+    start: G::State,
+    is_goal: P,
+    eps: [Epsilon; N],
+    rule: MergeRule,
+) -> Output<G::State, [C; N]>
+where
+    G: Graph<Weight = [C; N]>,
+    H: Heuristic<G::State, [C; N]>,
+    C: Cost + WideMul,
     P: Fn(&G::State) -> bool,
 {
     let mut search = Search {
@@ -134,6 +198,7 @@ where
         heuristic,
         is_goal,
         eps,
+        rule,
         paths: Vec::new(),
         pairs: Vec::new(),
         open: BinaryHeap::new(),
@@ -195,6 +260,8 @@ struct Search<'a, G: Graph, H, C, P, const N: usize> {
     is_goal: P,
     /// Tolerances per objective.
     eps: [Epsilon; N],
+    /// How merges pick the representative.
+    rule: MergeRule,
     /// Every representative path; pairs and parents index into it.
     paths: Vec<PathNode<G::State, C, N>>,
     /// Every pair ever pushed; open-list entries index into it.
@@ -217,7 +284,7 @@ impl<G, H, C, P, const N: usize> Search<'_, G, H, C, P, N>
 where
     G: Graph<Weight = [C; N]>,
     H: Heuristic<G::State, [C; N]>,
-    C: Cost,
+    C: Cost + WideMul,
     P: Fn(&G::State) -> bool,
 {
     /// Pushes the start pair, unless the heuristic reports a dead end.
@@ -364,30 +431,42 @@ where
     }
 
     /// The pair with the component-wise minimum apex of `a` and `b` and the
-    /// representative chosen by the paper's L method, or `None` if that
-    /// pair is not ε-bounded.
+    /// representative chosen by [`Search::rule`], or `None` if no choice
+    /// the rule allows is ε-bounded (lines 29 and 30).
     ///
-    /// The L method takes the representative whose cost is lexicographically
-    /// smaller read from the last objective to the first (`a`'s on a tie)
-    /// and does not fall back to the other one. `a` and `b` share `h`: they
-    /// are at the same state, or both at goals, where `h` is zero.
+    /// `a` and `b` share `h`: they are at the same state, or both at goals,
+    /// where `h` is zero.
     fn merge(&self, a: Pair<C, N>, b: Pair<C, N>) -> Option<Pair<C, N>> {
-        let apex = core::array::from_fn(|i| a.apex[i].min(b.apex[i]));
-        let (ga, gb) = (&self.paths[a.rep].g, &self.paths[b.rep].g);
-        let rep = if gb.iter().rev().lt(ga.iter().rev()) {
-            b.rep
-        } else {
-            a.rep
-        };
-
-        let merged = Pair {
-            apex,
+        let with_rep = |rep| Pair {
+            apex: core::array::from_fn(|i| a.apex[i].min(b.apex[i])),
             rep,
             h: a.h,
             alive: true,
         };
+        let (for_a, for_b) = (with_rep(a.rep), with_rep(b.rep));
 
-        self.is_bounded(&merged).then_some(merged)
+        match self.rule {
+            MergeRule::Greedy => {
+                let excess_a = self.excess(&for_a);
+                let excess_b = self.excess(&for_b);
+                match (excess_a, excess_b) {
+                    (Some(x), Some(y)) if x.is_greater(y) => Some(for_b),
+                    (Some(_), _) => Some(for_a),
+                    (None, Some(_)) => Some(for_b),
+                    (None, None) => None,
+                }
+            }
+            MergeRule::ReverseLex => {
+                let (ga, gb) = (&self.paths[a.rep].g, &self.paths[b.rep].g);
+                let merged = if gb.iter().rev().lt(ga.iter().rev()) {
+                    for_b
+                } else {
+                    for_a
+                };
+
+                self.is_bounded(&merged).then_some(merged)
+            }
+        }
     }
 
     /// Returns `true` if the representative's `f` is within the tolerances
@@ -395,6 +474,34 @@ where
     fn is_bounded(&self, pair: &Pair<C, N>) -> bool {
         let f_rep = add(self.paths[pair.rep].g, pair.h);
         self.within(&f_rep, &add(pair.apex, pair.h))
+    }
+
+    /// The largest relative excess `max_i (f_i(π) - f_i(A)) / (ε_i f_i(A))`
+    /// of the representative over the apex, or `None` if the pair is not
+    /// ε-bounded.
+    ///
+    /// The paper's slack is one minus this, so the greedy rule's larger
+    /// slack is the smaller excess. Both terms of an [`Excess::Ratio`] are
+    /// exact: a bounded pair has `den_i · f_i(π)` and
+    /// `(den_i + num_i) · f_i(A)` without saturation (see
+    /// [`Epsilon::within`]), and both terms are at most those.
+    fn excess(&self, pair: &Pair<C, N>) -> Option<Excess<C>> {
+        if !self.is_bounded(pair) {
+            return None;
+        }
+
+        let f_rep = add(self.paths[pair.rep].g, pair.h);
+        let f_apex = add(pair.apex, pair.h);
+        let ratios = (0..N).filter(|&i| f_rep[i] != f_apex[i]).map(|i| {
+            let eps = self.eps[i];
+            let over = f_rep[i].abs_diff(f_apex[i]).saturating_times(eps.den());
+            Excess::Ratio {
+                over,
+                of: f_apex[i].saturating_times(eps.num()),
+            }
+        });
+
+        Some(ratios.fold(Excess::Zero, |x, y| if y.is_greater(x) { y } else { x }))
     }
 
     /// Adds a pair to the pair arena, the open list and its state's open
@@ -463,5 +570,35 @@ where
         path.reverse();
 
         Solution { cost, path }
+    }
+}
+
+/// How far a representative's `f` exceeds its apex's `f`, relative to the
+/// tolerance, in the worst objective.
+#[derive(Clone, Copy)]
+enum Excess<C> {
+    /// The representative's `f` equals the apex's in every objective.
+    Zero,
+    /// The positive ratio `over / of`: `over` is `den_i · (f_i(π) - f_i(A))`
+    /// and `of` is `num_i · f_i(A)`, both non-zero.
+    Ratio {
+        /// The scaled excess of the representative.
+        over: C,
+        /// The scaled tolerance it is measured against.
+        of: C,
+    },
+}
+
+impl<C: WideMul> Excess<C> {
+    /// Returns `true` if `self` is larger than `other`, compared exactly by
+    /// cross-multiplication.
+    fn is_greater(self, other: Self) -> bool {
+        match (self, other) {
+            (Self::Ratio { over, of }, Self::Ratio { over: o, of: f }) => {
+                over.wide_mul(f) > o.wide_mul(of)
+            }
+            (Self::Ratio { .. }, Self::Zero) => true,
+            (Self::Zero, _) => false,
+        }
     }
 }

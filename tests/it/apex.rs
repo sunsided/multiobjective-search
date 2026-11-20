@@ -1,7 +1,9 @@
 //! A*pex tests: the multiplicative approximation guarantee for two to four
 //! objectives, property-tested against the brute-force Pareto front.
 
-use multiobjective_search::{Epsilon, Output, ZeroHeuristic, apex_star, heuristic_fn};
+use multiobjective_search::{
+    Epsilon, MergeRule, Output, ZeroHeuristic, apex_star, apex_star_with, heuristic_fn,
+};
 use proptest::prelude::*;
 
 use crate::brute_force::pareto_costs;
@@ -47,27 +49,31 @@ fn check_apex<const N: usize>(
 }
 
 /// Runs the guarantee check with the zero and the exact heuristic, and the
-/// exactness check with zero tolerances.
+/// exactness check with zero tolerances, for every merge rule.
 fn check_all<const N: usize>(problem: &Problem<N>, eps: [Epsilon; N]) -> Result<(), TestCaseError> {
     let h = exact_heuristic(problem);
     let goal = |v: &usize| problem.goals[*v];
     let (graph, start) = (&problem.graph, problem.start);
-
-    check_apex(
-        problem,
-        &apex_star(graph, ZeroHeuristic, start, goal, eps),
-        eps,
-    )?;
     let exact = heuristic_fn(|v: &usize| h[*v]);
-    check_apex(problem, &apex_star(graph, exact, start, goal, eps), eps)?;
-    check(
-        problem,
-        &apex_star(graph, ZeroHeuristic, start, goal, [Epsilon::ZERO; N]),
-    )?;
-    check(
-        problem,
-        &apex_star(graph, exact, start, goal, [Epsilon::ZERO; N]),
-    )
+
+    for rule in [MergeRule::Greedy, MergeRule::ReverseLex] {
+        let run = |eps| {
+            [
+                apex_star_with(graph, ZeroHeuristic, start, goal, eps, rule),
+                apex_star_with(graph, exact, start, goal, eps, rule),
+            ]
+        };
+
+        for out in run(eps) {
+            check_apex(problem, &out, eps)?;
+        }
+
+        for out in run([Epsilon::ZERO; N]) {
+            check(problem, &out)?;
+        }
+    }
+
+    Ok(())
 }
 
 /// A strategy for tolerances `num / den` up to 300 %, zero included.
@@ -148,6 +154,27 @@ fn pruning_lowers_the_solution_apex() {
     let costs: Vec<_> = out.solutions.iter().map(|s| s.cost).collect();
 
     assert_eq!(costs, [[2, 2, 1], [3, 4, 0]]);
+}
+
+/// The default rule is the paper's greedy G method, and it differs from the
+/// L method: against the merged apex `[10, 10]`, `[10, 13]` exceeds it by
+/// 60 % of the tolerance and `[14, 10]` by 80 %, so G keeps `[10, 13]`
+/// where L keeps `[14, 10]`.
+#[test]
+fn greedy_is_the_default_and_differs_from_reverse_lex() {
+    let graph = EdgeList {
+        nodes: 2,
+        edges: vec![(0, 1, [10, 13]), (0, 1, [14, 10])],
+    };
+    let eps = [Epsilon::new(1, 2); 2];
+    let run = |rule| apex_star_with(&graph, ZeroHeuristic, 0, |v| *v == 1, eps, rule);
+
+    assert_eq!(
+        costs(&apex_star(&graph, ZeroHeuristic, 0, |v| *v == 1, eps)),
+        [[10, 13]]
+    );
+    assert_eq!(costs(&run(MergeRule::Greedy)), [[10, 13]]);
+    assert_eq!(costs(&run(MergeRule::ReverseLex)), [[14, 10]]);
 }
 
 proptest! {
