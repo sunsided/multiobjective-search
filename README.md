@@ -56,6 +56,8 @@ reference on random graphs with two to four objectives:
       pairs and dissimilar paths; the coverage table is in `docs/design.md`
 - [x] Parallel MOA\* (`parallel_moa_star`, feature `parallel`): one MOA\* per
       cyclic objective order with shared multi-level upper bounds (Ahmadi et al.)
+- [x] Objective-aggregation search (`aggregated_search`): solution objectives as
+      monotone aggregations of hidden objectives (Peer et al.)
 - [x] Brute-force reference over simple paths (`brute_force`)
 - [x] Pareto frontier for any number of objectives, `O(log n)` queries for two
       (`Front`, `BiFront`)

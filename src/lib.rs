@@ -34,6 +34,7 @@
 //! | [`min_ratio_path`], [`min_cost_reliability_ratio`] | ratio | none | Linear fractional (Dinkelbach, exact signed arithmetic) and cost/reliability ratios. |
 //! | [`ranking`] | 2 | consistent | The classic ranking method: loopless paths by first cost. |
 //! | [`disjoint_pair`] | scalar | none | Suurballe: the cheapest edge- or state-disjoint pair; [`supported_disjoint_pairs`] for two objectives, [`disjoint_pair_front`] for the full bi-objective front, [`maximally_disjoint_pairs`] for cost against shared edges, [`dissimilar_paths`] for k dissimilar paths. Needs an [`EdgeGraph`]. |
+//! | [`aggregated_search`] | `M` hidden, `K` solution | admissible in the hidden space | Objective-aggregation functions over hidden objectives, exact or ε-approximate. |
 //! | [`brute_force`] | any `N` | none | Exhaustive reference for tests on small graphs. |
 //!
 //! Supporting types:
@@ -80,6 +81,7 @@ extern crate alloc;
 #[cfg(feature = "std")]
 extern crate std;
 
+mod aggregate;
 mod anytime_boa;
 mod apex;
 mod boa;
@@ -111,6 +113,7 @@ mod reference_point;
 mod sip;
 mod two_phase;
 
+pub use aggregate::{Aggregated, Aggregation, aggregated_search};
 pub use anytime_boa::{
     AnytimeFront, ApproxFactor, WeightedSum, boa_star_anytime, boa_star_anytime_basic,
     boa_star_anytime_ws,

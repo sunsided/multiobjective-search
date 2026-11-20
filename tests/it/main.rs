@@ -2,6 +2,7 @@
 //! cross-checked against a brute-force reference that shares no code with
 //! the crate.
 
+mod aggregate;
 mod anytime;
 mod apex;
 mod approx;

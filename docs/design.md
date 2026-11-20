@@ -379,6 +379,23 @@ workers, blocks) to 7.2 ms (2 + 2); on the 24x24 two-objective grid
 parallel BOBA* takes 5.5 ms and SIP-MOSP 15 to 21 ms. These graphs are
 far smaller than the paper's, where coordination is amortized.
 
+### Objective aggregation against Peer et al.
+
+H. Peer, E. Weiss, R. Alterovitz, O. Salzman. "Generalizing
+Multi-Objective Search via Objective-Aggregation Functions." arXiv
+2509.22085. `aggregated_search` and `Aggregation`; `tests/it/aggregate.rs`
+checks additive and bottleneck hidden objectives, exact and approximate,
+against brute force over the aggregated front.
+
+| Paper rule | Here | Status |
+|---|---|---|
+| Hidden cost by a monotone extension `F_ext(g, c)`, solution cost `F_agg(c_ext)` monotone (Section IV.A) | `Aggregation { extend, aggregate }`, any `M` hidden and `K` solution objectives | matches; `F_ext` must also never decrease `g`, so `f = g + h` bounds completions |
+| Open list in lexicographic `F_agg(f)` order | same | matches |
+| Path dominance on the hidden `g` per vertex | full weak dominance against the labels expanded at the state | matches |
+| Solution dominance on `F_agg(f)`; `ε` variant on the same test | same, `Epsilon` per solution objective | matches |
+| Returns the aggregated front (Theorem 1) | plus a final Pareto filter of the aggregated costs, and the hidden cost of each solution | matches |
+| Applications (POI coverage, shadows, road types) | not built in; expressed by the caller's `extend` and `aggregate` | deliberate |
+
 ### Parallel MOA* against Ahmadi et al.
 
 `parallel_moa_star` (feature `parallel`); `tests/it/parallel_moa.rs`
