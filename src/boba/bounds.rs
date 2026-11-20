@@ -80,6 +80,61 @@ impl<S: Clone + Ord, C: Cost> Bounds<S, C> {
         })
     }
 
+    /// [`Bounds::new`] with each phase's two searches on two threads, as in
+    /// the paper. Every search does exactly the same work as in the
+    /// sequential version, so the result is identical.
+    #[cfg(feature = "parallel")]
+    pub(super) fn new_parallel(
+        start: &S,
+        goal: &S,
+        successors: impl Fn(&S, &mut Vec<(S, [C; 2])>) + Sync,
+        predecessors: impl Fn(&S, &mut Vec<(S, [C; 2])>) + Sync,
+    ) -> Option<Self>
+    where
+        S: Send + Sync,
+        C: Send + Sync,
+    {
+        let none = |_: &S| Some(C::ZERO);
+        let (successors, predecessors) = (&successors, &predecessors);
+
+        let ((mut a, ub2), (mut b, ub1)) = std::thread::scope(|scope| {
+            let a = scope.spawn(|| {
+                let mut a = Lex::new(start.clone(), 0);
+                let ub2 = a.run_to(goal, successors, &none);
+                (a, ub2)
+            });
+            let mut b = Lex::new(goal.clone(), 1);
+            let ub1 = b.run_to(start, predecessors, &none);
+
+            (a.join().expect("search A panicked"), (b, ub1))
+        });
+        let (ub1, ub2) = (ub1?, ub2?);
+
+        std::thread::scope(|scope| {
+            scope.spawn(|| a.run_within(ub1, successors, &none));
+            b.run_within(ub2, predecessors, &none);
+        });
+
+        let (c, d) = std::thread::scope(|scope| {
+            let c = scope.spawn(|| {
+                let mut c = Lex::new(start.clone(), 1);
+                c.run_within(ub2, successors, &|s| b.distance(s));
+                c
+            });
+            let mut d = Lex::new(goal.clone(), 0);
+            d.run_within(ub1, predecessors, &|s| a.distance(s));
+
+            (c.join().expect("search C panicked"), d)
+        });
+
+        Some(Self {
+            from_start_1: a,
+            from_start_2: c,
+            to_goal_1: d,
+            to_goal_2: b,
+        })
+    }
+
     /// The forward heuristic: distances from `state` to the goal, or `None`
     /// if `state` cannot lie on a Pareto-optimal path.
     pub(super) fn forward(&self, state: &S) -> Option<[C; 2]> {

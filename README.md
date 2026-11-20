@@ -17,6 +17,9 @@ reference on random graphs with two to four objectives:
       cost-bounded preliminary searches (run one after another), or with
       caller-supplied heuristics (`boba_star_with`); with the paper's early
       solution update and heuristic tuning
+- [x] Multi-threaded BOBA\* behind the `parallel` feature (`boba_star_parallel`,
+      `boba_star_with_parallel`; `std::thread::scope`, no dependencies),
+      cross-checked against the sequential front
 - [x] EMOA\*: multi-objective A* with truncated dominance checks (`emoa_star`),
       sorted `Vec` instead of a balanced tree
 - [x] NAMOA\*: classic multi-objective A* for admissible heuristics (`namoa_star`)

@@ -11,4 +11,6 @@ mod dimacs;
 mod fixtures;
 mod front;
 mod namoa;
+#[cfg(feature = "parallel")]
+mod parallel;
 mod reference;

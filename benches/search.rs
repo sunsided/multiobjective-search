@@ -312,6 +312,10 @@ fn bench_road(c: &mut Criterion) {
     group.bench_function("boba_star", |b| {
         b.iter(|| boba_star(&graph, black_box(1), goal));
     });
+    #[cfg(feature = "parallel")]
+    group.bench_function("boba_star_parallel", |b| {
+        b.iter(|| multiobjective_search::boba_star_parallel(&graph, black_box(1), goal));
+    });
     group.bench_function("pp_a_star_1pct", |b| {
         let eps = [Epsilon::new(1, 100); 2];
         b.iter(|| pp_a_star(&graph, ZeroHeuristic, black_box(1), is_goal, eps));

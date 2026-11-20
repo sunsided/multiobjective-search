@@ -36,14 +36,18 @@
 //! Differences from the paper, all of which only cost speed:
 //!
 //! - The searches alternate one label at a time instead of running in
-//!   parallel threads (the crate is `no_std`).
+//!   parallel threads (the crate is `no_std`), unless the `parallel`
+//!   feature is on and `boba_star_parallel` or `boba_star_with_parallel`
+//!   is used.
 //! - The four cost-bounded preliminary searches (see `bounds`) run one
-//!   after another instead of two at a time.
+//!   after another instead of two at a time, again unless in parallel.
 //! - The search stops as soon as either direction is done, instead of
 //!   letting both run out; at that point every solution has been found
 //!   (see [`boba_star`]).
 
 mod bounds;
+#[cfg(feature = "parallel")]
+mod parallel;
 
 use alloc::vec::Vec;
 
@@ -52,6 +56,9 @@ use search_core::{Cost, Heuristic, heuristic_fn};
 use crate::boa::{Completions, NoCompletions, Search, Tolerance};
 use crate::graph::{Graph, ReverseGraph};
 use crate::output::{Output, Solution, Stats};
+
+#[cfg(feature = "parallel")]
+pub use parallel::{boba_star_parallel, boba_star_with_parallel};
 
 /// Finds one path for every Pareto-optimal cost vector from `start` to
 /// `goal` by searching from both ends.

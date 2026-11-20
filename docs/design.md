@@ -235,7 +235,7 @@ are deliberate and leave the returned cost vectors unchanged:
 | NAMOA*dr | `t`-discard with case split on `v1` | weak dominance on objectives `1..N` | lexicographic order makes the first objective of closed labels and solutions no larger; equality in all objectives is the duplicate case above |
 | EMOA* | AVL tree per frontier | sorted `Vec` (`emoa_star`), treap (`emoa_star_tree`) | same queries; the tree also prunes by subtree bounding boxes |
 | PP-A* | two-sided bounded test, returns `tl` | one-sided (first objective), returns `br` | a different but proven covering; see `pp_a_star` |
-| BOBA* | preliminary searches in parallel threads | sequential | same distances |
+| BOBA* | preliminary searches and directions in parallel threads | sequential by default; threads behind the `parallel` feature | same distances; the join drops boundary vectors a late bound leaves |
 | BOBA* | early solution update, heuristic tuning | implemented; the join of the two directions also drops a dominated boundary solution | an early solution made before the other direction's bound arrives can be dominated by that direction's first |
 
 ## Testing strategy

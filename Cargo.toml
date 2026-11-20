@@ -11,6 +11,13 @@ readme = "README.md"
 keywords = ["search", "pareto", "multi-objective", "astar", "pathfinding"]
 categories = ["algorithms", "no-std"]
 
+[features]
+## Links `std`. No API of its own; required by `parallel`.
+std = []
+## Multi-threaded BOBA* (`boba_star_parallel`, `boba_star_with_parallel`)
+## on `std::thread::scope`.
+parallel = ["std"]
+
 [dependencies]
 search-core = { path = "../search-core", version = "0.0.0" }
 
@@ -29,3 +36,6 @@ proptest = "1"
 [[bench]]
 name = "search"
 harness = false
+
+[package.metadata.docs.rs]
+all-features = true

@@ -37,6 +37,14 @@
 //! - [`Epsilon`]: a rational tolerance `ε = num / den` for the approximate
 //!   searches, tested with [`Cost::saturating_times`].
 //!
+//! ## Features
+//!
+//! - `std`: links `std`; no API of its own.
+//! - `parallel` (implies `std`): multi-threaded BOBA*,
+//!   `boba_star_parallel` and `boba_star_with_parallel`.
+//!
+//! Without features the crate is `no_std` with `alloc`.
+//!
 //! ## Status
 //!
 //! Pre-release. Version 0.0.0 reserves the name; the API is a draft and will change.
@@ -47,6 +55,8 @@
 #![forbid(unsafe_code)]
 
 extern crate alloc;
+#[cfg(feature = "std")]
+extern crate std;
 
 mod boa;
 mod boba;
@@ -64,6 +74,8 @@ mod reference;
 
 pub use boa::{boa_star, boa_star_approx, boa_star_eps};
 pub use boba::{boba_star, boba_star_with};
+#[cfg(feature = "parallel")]
+pub use boba::{boba_star_parallel, boba_star_with_parallel};
 pub use cost::{Dominates, add, weakly_dominates};
 pub use dimacs::{DimacsError, DimacsErrorKind, RoadGraph};
 pub use emoa::{emoa_star, emoa_star_tree};
