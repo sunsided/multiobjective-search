@@ -48,6 +48,9 @@
 //! - [`Output`]: solutions sorted lexicographically by cost, plus counters.
 //! - [`RoadGraph`]: a loader for 9th DIMACS Challenge road networks
 //!   (`.gr` distance and time files, `.co` coordinates).
+//! - [`KnapsackGraph`] and [`LabelCount`]: graphs that encode
+//!   multi-objective knapsacks and the minimum-label objective as additive
+//!   paths for every search.
 //! - [`Epsilon`]: a rational tolerance `ε = num / den` for the approximate
 //!   searches, tested with [`Cost::saturating_times`].
 //!
@@ -82,6 +85,7 @@ mod constrained;
 mod cost;
 mod dimacs;
 mod emoa;
+mod encode;
 mod epsilon;
 mod frontier_search;
 mod graph;
@@ -115,6 +119,7 @@ pub use constrained::constrained_shortest_path;
 pub use cost::{Dominates, add, weakly_dominates};
 pub use dimacs::{DimacsError, DimacsErrorKind, RoadGraph};
 pub use emoa::{emoa_star, emoa_star_tree};
+pub use encode::{KnapsackGraph, LabelCount};
 pub use epsilon::Epsilon;
 pub use graph::{Graph, ReverseGraph, ZeroHeuristic};
 pub use mvh::{MvHeuristic, MvHeuristicFn, MvhTable, SingleValued, apex_mvh, mv_heuristic_fn};

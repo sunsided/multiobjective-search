@@ -399,3 +399,117 @@ proptest! {
         check_reference(&p3, (r, w), (q, v), split)?;
     }
 }
+
+/// The Pareto-maximal kept values of a knapsack by enumerating subsets,
+/// sorted descending in the first value (ascending in lost value).
+fn knapsack_front<const N: usize, const M: usize>(
+    items: &[([u32; M], [u32; N])],
+    capacity: [u32; M],
+) -> Vec<[u32; N]> {
+    let kept: Vec<[u32; N]> = (0..1_u32 << items.len())
+        .filter(|mask| {
+            (0..M).all(|r| {
+                items
+                    .iter()
+                    .enumerate()
+                    .filter(|(i, _)| mask >> i & 1 == 1)
+                    .map(|(_, it)| it.0[r])
+                    .sum::<u32>()
+                    <= capacity[r]
+            })
+        })
+        .map(|mask| {
+            core::array::from_fn(|k| {
+                items
+                    .iter()
+                    .enumerate()
+                    .filter(|(i, _)| mask >> i & 1 == 1)
+                    .map(|(_, it)| it.1[k])
+                    .sum()
+            })
+        })
+        .collect();
+    let mut front: Vec<_> = kept
+        .iter()
+        .copied()
+        .filter(|a| !kept.iter().any(|b| b != a && (0..N).all(|k| b[k] >= a[k])))
+        .collect();
+    front.sort_unstable();
+    front.dedup();
+    front
+}
+
+/// Solves a knapsack with NAMOA* and checks it against enumeration.
+fn check_knapsack<const N: usize, const M: usize>(
+    items: &[([u32; M], [u32; N])],
+    capacity: [u32; M],
+) -> Result<(), TestCaseError> {
+    let total: [u32; N] = core::array::from_fn(|k| items.iter().map(|it| it.1[k]).sum());
+    let expected = knapsack_front(items, capacity);
+    let knapsack = multiobjective_search::KnapsackGraph::new(items.to_vec(), capacity);
+    let out = multiobjective_search::namoa_star(&knapsack, ZeroHeuristic, knapsack.start(), |s| {
+        knapsack.is_goal(s)
+    });
+
+    let mut kept: Vec<[u32; N]> = Vec::new();
+    for s in &out.solutions {
+        let picks = knapsack.taken(&s.path);
+        let value: [u32; N] = core::array::from_fn(|k| picks.iter().map(|&i| items[i].1[k]).sum());
+        prop_assert_eq!(value, core::array::from_fn(|k| total[k] - s.cost[k]));
+        prop_assert!(
+            (0..M).all(|r| picks.iter().map(|&i| items[i].0[r]).sum::<u32>() <= capacity[r])
+        );
+        kept.push(value);
+    }
+
+    kept.sort_unstable();
+    prop_assert_eq!(kept, expected);
+    Ok(())
+}
+
+/// A graph read with objective 1 zeroed, for label counting.
+struct FirstOnly<'a>(&'a EdgeList<2>);
+
+impl Graph for FirstOnly<'_> {
+    type State = usize;
+    type Weight = [u32; 2];
+
+    fn successors(&self, state: &usize, out: &mut Vec<(usize, [u32; 2])>) {
+        self.0.successors(state, out);
+    }
+}
+
+proptest! {
+    /// Multi-objective knapsacks: two values with two resources, three
+    /// values with one.
+    #[test]
+    fn knapsack_matches_enumeration(
+        items2 in prop::collection::vec((prop::array::uniform2(0..5_u32), prop::array::uniform2(0..6_u32)), 0..7),
+        items3 in prop::collection::vec((prop::array::uniform1(0..5_u32), prop::array::uniform3(0..6_u32)), 0..7),
+        cap in prop::array::uniform2(0..12_u32),
+    ) {
+        check_knapsack(&items2, cap)?;
+        check_knapsack(&items3, [cap[0]])?;
+    }
+
+    /// Label counting: (cost, distinct labels) with label `c[1] mod 3`.
+    #[test]
+    fn label_count_matches_enumeration(p in problems::<2>()) {
+        let pairs: Vec<[u32; 2]> = all_paths(&p)
+            .iter()
+            .map(|edges| {
+                let labels: std::collections::BTreeSet<u32> = edges.iter().map(|c| c[1] % 3).collect();
+                [edges.iter().map(|c| c[0]).sum(), u32::try_from(labels.len()).unwrap()]
+            })
+            .collect();
+        let mut front: Vec<_> = pairs.iter().copied().filter(|a| !pairs.iter().any(|b| b != a && b[0] <= a[0] && b[1] <= a[1])).collect();
+        front.sort_unstable();
+        front.dedup();
+
+        let graph = FirstOnly(&p.graph);
+        let counted = multiobjective_search::LabelCount::new(&graph, 1, |_: &usize, _: &usize, w: &[u32; 2]| w[1] % 3);
+        let out = multiobjective_search::namoa_star(&counted, ZeroHeuristic, counted.start(p.start), |s: &(usize, _)| p.goals[s.0]);
+        let costs: Vec<_> = out.solutions.iter().map(|s| s.cost).collect();
+        prop_assert_eq!(costs, front);
+    }
+}
