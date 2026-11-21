@@ -1,6 +1,53 @@
 # multiobjective-search
 
+[![crates.io](https://img.shields.io/crates/v/multiobjective-search.svg)](https://crates.io/crates/multiobjective-search)
+[![docs.rs](https://img.shields.io/docsrs/multiobjective-search)](https://docs.rs/multiobjective-search)
+[![CI](https://github.com/sunsided/multiobjective-search/actions/workflows/ci.yml/badge.svg)](https://github.com/sunsided/multiobjective-search/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/sunsided/multiobjective-search/graph/badge.svg)](https://codecov.io/gh/sunsided/multiobjective-search)
+[![MSRV](https://img.shields.io/crates/msrv/multiobjective-search)](https://crates.io/crates/multiobjective-search)
+[![License](https://img.shields.io/crates/l/multiobjective-search)](https://github.com/sunsided/multiobjective-search#license)
+[![unsafe forbidden](https://img.shields.io/badge/unsafe-forbidden-success.svg)](https://github.com/rust-secure-code/safety-dance/)
+
 Multi-objective shortest paths: BOA*, BOBA*, EMOA* and NAMOA* over Pareto frontiers.
+
+Given a graph whose edges carry cost vectors, the algorithms find one path for every
+Pareto-optimal cost vector from a start state to a goal. The crate is `no_std` with `alloc`,
+and builds on the cost and heuristic traits of
+[`search-core`](https://github.com/sunsided/search-core).
+
+## Installation
+
+```sh
+cargo add multiobjective-search
+```
+
+## Usage
+
+Two routes from node 1 to node 3, one shorter and one faster; BOA\* returns both:
+
+```rust
+use multiobjective_search::{RoadGraph, ZeroHeuristic, boa_star};
+
+let distance = "p sp 3 3\na 1 2 10\na 2 3 10\na 1 3 25\n";
+let time = "p sp 3 3\na 1 2 5\na 2 3 5\na 1 3 6\n";
+let graph = RoadGraph::from_dimacs(distance, time)?;
+
+let out = boa_star(&graph, ZeroHeuristic, 1, |s| *s == 3);
+let costs: Vec<_> = out.solutions.iter().map(|s| s.cost).collect();
+assert_eq!(costs, [[20, 10], [25, 6]]);
+# Ok::<(), multiobjective_search::DimacsError>(())
+```
+
+## Features
+
+- `std`: links `std`; no API of its own, required by `parallel`.
+- `parallel`: multi-threaded BOBA\* (`boba_star_parallel`, `boba_star_with_parallel`),
+  SIP-MOSP (`sip_mosp`) and parallel MOA\* (`parallel_moa_star`) on `std::thread::scope`.
+
+## MSRV
+
+The minimum supported Rust version is 1.86 (`rust-version` in `Cargo.toml`). It is a signal,
+not a contract: raising it is a minor release, never a patch release.
 
 ## Scope and status
 
@@ -109,13 +156,22 @@ Adopting `search-core` (unreleased, after 0.0.0) changed the public API:
 ## Status
 
 Pre-release. Version 0.0.0 reserves the name; the API is a draft and will change.
-See `docs/design.md` for the design.
+See [`docs/design.md`](https://github.com/sunsided/multiobjective-search/blob/main/docs/design.md) for the design.
 
 ## License
 
 Licensed under either of
 
-- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE))
-- MIT license ([LICENSE-MIT](LICENSE-MIT))
+- Apache License, Version 2.0 ([LICENSE-APACHE](https://github.com/sunsided/multiobjective-search/blob/main/LICENSE-APACHE))
+- MIT license ([LICENSE-MIT](https://github.com/sunsided/multiobjective-search/blob/main/LICENSE-MIT))
 
-at your option.
+at your option. The license is `MIT OR Apache-2.0`; `REUSE.toml` records it for every file.
+
+Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion
+in this work by you, as defined in the Apache-2.0 license, shall be dual licensed as above,
+without any additional terms or conditions.
+
+## Contributing
+
+See [CONTRIBUTING.md](https://github.com/sunsided/multiobjective-search/blob/main/CONTRIBUTING.md). Local development expects
+[`search-core`](https://github.com/sunsided/search-core) checked out next to this repository.
