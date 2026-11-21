@@ -29,17 +29,17 @@
 //! | [`minsum_maxmin_multi`] | `N` sums + `M` bottlenecks | consistent on the sums | Several maxmin objectives. |
 //! | [`min_cost_capacity_ratio`], [`quickest_path`] | sum + bottleneck | consistent on the sum | Ratio and quickest-path objectives read off the minsum–maxmin front. |
 //! | [`constrained_shortest_path`] | 2 | consistent | Cheapest path with the second cost within a budget. |
-//! | [`two_phase`] | 2 | consistent | Two-phase method: supported solutions by weighted sums ([`supported_solutions`]), then the rest. |
+//! | [`two_phase`](fn@two_phase) | 2 | consistent | Two-phase method: supported solutions by weighted sums ([`supported_solutions`]), then the rest. |
 //! | [`ReferencePoint`] | any `N` | admissible | Interactive: non-dominated solutions by Chebyshev distance to a movable reference point. |
 //! | [`fptas_constrained`] | 2 | none | FPTAS for the constrained shortest path: polynomially many labels, first cost within `1 + ε`. |
 //! | [`min_ratio_path`], [`min_cost_reliability_ratio`] | ratio | none | Linear fractional (Dinkelbach, exact signed arithmetic) and cost/reliability ratios. |
-//! | [`ranking`] | 2 | consistent | The classic ranking method: loopless paths by first cost. |
+//! | [`ranking`](fn@ranking) | 2 | consistent | The classic ranking method: loopless paths by first cost. |
 //! | [`disjoint_pair`] | scalar | none | Suurballe: the cheapest edge- or state-disjoint pair; [`supported_disjoint_pairs`] for two objectives, [`disjoint_pair_front`] for the full bi-objective front, [`maximally_disjoint_pairs`] for cost against shared edges, [`dissimilar_paths`] for k dissimilar paths. Needs an [`EdgeGraph`]. |
 //! | [`aggregated_search`] | `M` hidden, `K` solution | admissible in the hidden space | Objective-aggregation functions over hidden objectives, exact or ε-approximate. |
-//! | [`label_correcting`] | any `N` | none | Multi-objective label correcting (Guerriero and Musmanno). |
+//! | [`label_correcting`](fn@label_correcting) | any `N` | none | Multi-objective label correcting (Guerriero and Musmanno). |
 //! | [`DynamicSearch`] | any `N` | none | Dynamic MOS: incremental repair after edge changes on a [`DynamicGraph`]. |
 //! | [`pareto_spanning_trees`] | any `N` | none | Multi-objective minimum spanning trees; [`two_phase_spanning_trees`] for two objectives. |
-//! | [`tpa_paths`] | any `N` | admissible | TPA: exact anytime box splitting with augmented-Tchebycheff subproblems, well spread early; [`tpa`] over any solver. |
+//! | [`tpa_paths`] | any `N` | admissible | TPA: exact anytime box splitting with augmented-Tchebycheff subproblems, well spread early; [`tpa`](fn@tpa) over any solver. |
 //! | [`brute_force`] | any `N` | none | Exhaustive reference for tests on small graphs. |
 //!
 //! Supporting types:
@@ -188,3 +188,8 @@ pub use spanning::{
 };
 pub use tpa::{PathTchebycheff, Scalarization, TchebycheffSolver, TpaResult, tpa, tpa_paths};
 pub use two_phase::{supported_solutions, two_phase};
+
+/// Doctests for the code examples in README.md (not part of the API).
+#[cfg(doctest)]
+#[doc = include_str!("../README.md")]
+mod readme_doctests {}
