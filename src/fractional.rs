@@ -10,8 +10,9 @@ mod big;
 use alloc::collections::BTreeMap;
 use alloc::vec::Vec;
 use core::cmp::Ordering;
+use core::ops::{AddAssign, SubAssign};
 
-use search_core::{BigInt, BigUint, Cost, ExactNumber};
+use search_core::{BigInt, BigUint, Cost};
 
 use crate::graph::Graph;
 use crate::output::Solution;
@@ -27,8 +28,9 @@ use big::Big;
 /// `den · c1 - num · c2`; if that is negative, its ratio is smaller and
 /// becomes the next `λ`, else `λ` is optimal. The first round uses `-c2`
 /// alone to find some path with a positive denominator. The weights are
-/// signed, so they are summed as search-core [`BigInt`]s, exactly and
-/// without a width limit.
+/// signed. A round sums them in `i128` when a bound on every sum it can
+/// form fits, and as search-core [`BigInt`]s otherwise, so the result is
+/// exact without a width limit.
 /// Each round is a Bellman-Ford pass over the reachable graph when the
 /// weights have no negative cycle, and an exhaustive search over simple
 /// paths when they do (the inner problem is then NP-hard, as Soroush
@@ -70,22 +72,39 @@ where
     P: Fn(&G::State) -> bool,
 {
     let net = Explicit::explore(graph, start, &is_goal);
-    // λ = num / den; the first round, den = 0, maximizes c2.
-    let (mut num, mut den) = (BigUint::one(), BigUint::zero());
+    dinkelbach(&net, false).map(|path| net.solution(&path))
+}
+
+/// Dinkelbach's rounds over `net`: the best path, as edge indices. With
+/// `exact_only`, every round uses [`BigInt`] weights (for tests).
+fn dinkelbach<S: Clone + Ord, C: Cost + Into<u64>>(
+    net: &Explicit<S, C>,
+    exact_only: bool,
+) -> Option<Vec<usize>> {
+    // λ = num / den; the first round, den = 0, maximizes c2. Path totals
+    // sum fewer than 2^64 costs below 2^64, so they fit `u128`.
+    let (mut num, mut den) = (1_u128, 0_u128);
     let mut best: Option<Vec<usize>> = None;
 
     loop {
-        let exact = |c: C| BigUint::from(u128::from(c.into()));
-        let weight = |w: &[C; 2]| {
-            BigInt::from(den.clone() * exact(w[0])) - BigInt::from(num.clone() * exact(w[1]))
+        let small = if exact_only {
+            None
+        } else {
+            net.small_weights(num, den)
         };
-        let (value, path) = net.minimum(weight)?;
-        if value >= BigInt::zero() {
+        let found = match small {
+            Some(weights) => net.minimum(&weights).map(|(v, path)| (v < 0, path)),
+            None => net
+                .minimum(&net.exact_weights(num, den))
+                .map(|(v, path)| (v.is_negative(), path)),
+        };
+        let (negative, path) = found?;
+        if !negative {
             break;
         }
 
         let [c1, c2] = net.totals(&path);
-        if c2 == BigUint::zero() {
+        if c2 == 0 {
             break;
         }
 
@@ -93,13 +112,25 @@ where
         best = Some(path);
     }
 
-    best.map(|path| net.solution(&path))
+    best
+}
+
+/// A signed weight of the inner problem: `i128` when no sum can
+/// overflow it, else [`BigInt`]. `Default` is zero.
+trait Weight:
+    Clone + Ord + Default + for<'a> AddAssign<&'a Self> + for<'a> SubAssign<&'a Self>
+{
+}
+
+impl<W> Weight for W where
+    W: Clone + Ord + Default + for<'a> AddAssign<&'a W> + for<'a> SubAssign<&'a W>
+{
 }
 
 /// The outcome of a Bellman-Ford pass.
-enum Relaxed {
+enum Relaxed<W> {
     /// No negative cycle: the best goal path, if any.
-    Done(Option<(BigInt, Vec<usize>)>),
+    Done(Option<(W, Vec<usize>)>),
     /// A negative cycle is reachable.
     NegativeCycle,
 }
@@ -151,35 +182,77 @@ impl<S: Clone + Ord, C: Cost + Into<u64>> Explicit<S, C> {
         net
     }
 
-    /// The simple goal path of smallest total `weight`, as edge indices,
+    /// The edge weights `den · c1 - num · c2` in `i128`, or `None` if a
+    /// weight or a sum the searches below can form might not fit.
+    ///
+    /// A Bellman-Ford distance or candidate is a walk of at most
+    /// `(n + 2) · |edges|` edges (one per relaxation), and an exhaustive
+    /// sum a subset of the edges, so `widest · |edges| · (n + 2)` bounds
+    /// every sum.
+    fn small_weights(&self, num: u128, den: u128) -> Option<Vec<i128>> {
+        let term = |a: u128, c: C| {
+            a.checked_mul(u128::from(c.into()))
+                .and_then(|t| i128::try_from(t).ok())
+        };
+        let weights = self
+            .edges
+            .iter()
+            .map(|e| term(den, e.2[0])?.checked_sub(term(num, e.2[1])?))
+            .collect::<Option<Vec<i128>>>()?;
+        let widest = weights.iter().map(|w| w.unsigned_abs()).max().unwrap_or(0);
+        let steps = u128::try_from(self.edges.len())
+            .ok()?
+            .checked_mul(u128::try_from(self.states.len()).ok()? + 2)?;
+        let bound = widest.checked_mul(steps)?;
+        i128::try_from(bound).is_ok().then_some(weights)
+    }
+
+    /// The edge weights `den · c1 - num · c2`, exactly.
+    fn exact_weights(&self, num: u128, den: u128) -> Vec<BigInt> {
+        let term =
+            |a: u128, c: C| BigInt::from(BigUint::from(a) * BigUint::from(u128::from(c.into())));
+        self.edges
+            .iter()
+            .map(|e| term(den, e.2[0]) - term(num, e.2[1]))
+            .collect()
+    }
+
+    /// The simple goal path of smallest total weight, as edge indices,
     /// with its weight; `None` if no goal is reachable.
-    fn minimum(&self, weight: impl Fn(&[C; 2]) -> BigInt) -> Option<(BigInt, Vec<usize>)> {
-        let weights: Vec<BigInt> = self.edges.iter().map(|e| weight(&e.2)).collect();
-        match self.bellman_ford(&weights) {
+    fn minimum<W: Weight>(&self, weights: &[W]) -> Option<(W, Vec<usize>)> {
+        match self.bellman_ford(weights) {
             Relaxed::Done(found) => found,
-            Relaxed::NegativeCycle => self.exhaustive(&weights),
+            Relaxed::NegativeCycle => self.exhaustive(weights),
         }
     }
 
     /// Bellman-Ford from the start; `None` if a negative cycle is
     /// reachable, else the best goal path.
-    fn bellman_ford(&self, weights: &[BigInt]) -> Relaxed {
+    fn bellman_ford<W: Weight>(&self, weights: &[W]) -> Relaxed<W> {
         let n = self.states.len();
-        let mut dist: Vec<Option<BigInt>> = alloc::vec![None; n];
+        let mut dist: Vec<Option<W>> = alloc::vec![None; n];
         let mut parent: Vec<Option<usize>> = alloc::vec![None; n];
-        dist[0] = Some(BigInt::zero());
+        dist[0] = Some(W::default());
+        // Candidates are built here and swapped in, so a relaxation reuses
+        // limbs instead of allocating.
+        let mut candidate = W::default();
 
         for round in 0..=n {
             let mut changed = false;
             for (k, &(from, to, _)) in self.edges.iter().enumerate() {
                 let Some(d) = &dist[from] else { continue };
-                let candidate = d.clone() + weights[k].clone();
+                candidate.clone_from(d);
+                candidate += &weights[k];
                 if dist[to].as_ref().is_none_or(|current| candidate < *current) {
                     if round == n {
                         return Relaxed::NegativeCycle;
                     }
 
-                    dist[to] = Some(candidate);
+                    match &mut dist[to] {
+                        Some(current) => core::mem::swap(current, &mut candidate),
+                        slot @ None => *slot = Some(candidate.clone()),
+                    }
+
                     parent[to] = Some(k);
                     changed = true;
                 }
@@ -209,33 +282,28 @@ impl<S: Clone + Ord, C: Cost + Into<u64>> Explicit<S, C> {
 
     /// Exhaustive search over simple paths, for weights with negative
     /// cycles.
-    fn exhaustive(&self, weights: &[BigInt]) -> Option<(BigInt, Vec<usize>)> {
-        let mut best: Option<(BigInt, Vec<usize>)> = None;
+    fn exhaustive<W: Weight>(&self, weights: &[W]) -> Option<(W, Vec<usize>)> {
+        let mut best: Option<(W, Vec<usize>)> = None;
         let mut visited = alloc::vec![false; self.states.len()];
         let mut path = Vec::new();
-        self.descend(
-            0,
-            &BigInt::zero(),
-            weights,
-            &mut visited,
-            &mut path,
-            &mut best,
-        );
+        let mut sum = W::default();
+        self.descend(0, &mut sum, weights, &mut visited, &mut path, &mut best);
         best
     }
 
-    /// One step of [`Explicit::exhaustive`].
-    fn descend(
+    /// One step of [`Explicit::exhaustive`]; `sum` is the weight of
+    /// `path`, updated in place and restored on return.
+    fn descend<W: Weight>(
         &self,
         at: usize,
-        sum: &BigInt,
-        weights: &[BigInt],
+        sum: &mut W,
+        weights: &[W],
         visited: &mut [bool],
         path: &mut Vec<usize>,
-        best: &mut Option<(BigInt, Vec<usize>)>,
+        best: &mut Option<(W, Vec<usize>)>,
     ) {
         if self.goal[at] {
-            if best.as_ref().is_none_or(|(b, _)| sum < b) {
+            if best.as_ref().is_none_or(|(b, _)| *sum < *b) {
                 *best = Some((sum.clone(), path.clone()));
             }
 
@@ -246,14 +314,9 @@ impl<S: Clone + Ord, C: Cost + Into<u64>> Explicit<S, C> {
         for (k, &(from, to, _)) in self.edges.iter().enumerate() {
             if from == at && !visited[to] {
                 path.push(k);
-                self.descend(
-                    to,
-                    &(sum.clone() + weights[k].clone()),
-                    weights,
-                    visited,
-                    path,
-                    best,
-                );
+                *sum += &weights[k];
+                self.descend(to, sum, weights, visited, path, best);
+                *sum -= &weights[k];
                 path.pop();
             }
         }
@@ -261,14 +324,15 @@ impl<S: Clone + Ord, C: Cost + Into<u64>> Explicit<S, C> {
         visited[at] = false;
     }
 
-    /// The summed costs of a path, exactly.
-    fn totals(&self, path: &[usize]) -> [BigUint; 2] {
-        let exact = |c: C| BigUint::from(u128::from(c.into()));
-        path.iter()
-            .fold([BigUint::zero(), BigUint::zero()], |[a, b], &k| {
-                let w = self.edges[k].2;
-                [a + exact(w[0]), b + exact(w[1])]
-            })
+    /// The summed costs of a simple path, as `u128`.
+    fn totals(&self, path: &[usize]) -> [u128; 2] {
+        path.iter().fold([0, 0], |s, &k| {
+            let w = self.edges[k].2;
+            [
+                s[0] + u128::from(w[0].into()),
+                s[1] + u128::from(w[1].into()),
+            ]
+        })
     }
 
     /// The solution for a path of edge indices.
@@ -432,4 +496,78 @@ where
 /// less reliable.
 fn covers<C: Ord>(k: &Label<C>, label: &Label<C>) -> bool {
     k.0 <= label.0 && k.1.times(&label.2).cmp(&label.1.times(&k.2)) != Ordering::Less
+}
+
+#[cfg(test)]
+mod tests {
+    //! Both weight representations of [`super::dinkelbach`]: the `i128`
+    //! fast path and the exact [`BigInt`](search_core::BigInt) fallback.
+
+    use alloc::vec::Vec;
+
+    use proptest::prelude::*;
+    use search_core::BigUint;
+
+    use super::{Explicit, dinkelbach};
+    use crate::graph::Graph;
+
+    /// An edge list over small states.
+    struct Edges(Vec<(u8, u8, [u64; 2])>);
+
+    impl Graph for Edges {
+        type State = u8;
+        type Weight = [u64; 2];
+
+        fn successors(&self, state: &u8, out: &mut Vec<(u8, [u64; 2])>) {
+            out.extend(self.0.iter().filter(|e| e.0 == *state).map(|e| (e.1, e.2)));
+        }
+    }
+
+    /// The reachable graph from 0 with goal 3.
+    fn net(edges: Vec<(u8, u8, [u64; 2])>) -> Explicit<u8, u64> {
+        Explicit::explore(&Edges(edges), 0, &|s: &u8| *s == 3)
+    }
+
+    /// The ratio `Σc1 / Σc2` of a path, as an exact fraction.
+    fn ratio(net: &Explicit<u8, u64>, path: &[usize]) -> (BigUint, BigUint) {
+        let [a, b] = net.totals(path);
+        (BigUint::from(a), BigUint::from(b))
+    }
+
+    /// Costs near `u64::MAX` overflow the `i128` weights, so the second
+    /// round falls back to exact weights and still finds the better route.
+    #[test]
+    fn large_costs_fall_back_to_exact() {
+        let max = u64::MAX;
+        let net = net(alloc::vec![(0, 3, [max, max]), (0, 3, [max - 1, max])]);
+        let big = u128::from(max);
+        assert!(net.small_weights(big, big).is_none());
+        assert!(net.small_weights(1, 0).is_some());
+
+        let path = dinkelbach(&net, false).expect("a path");
+        assert_eq!(net.solution(&path).cost, [max - 1, max]);
+        assert_eq!(dinkelbach(&net, true), Some(path));
+    }
+
+    /// A cost: small, or near `u64::MAX` to force the exact fallback.
+    fn cost() -> impl Strategy<Value = u64> {
+        prop_oneof![0..20_u64, (u64::MAX - 20)..=u64::MAX]
+    }
+
+    proptest! {
+        /// The mixed rounds (`i128` where it fits) find a path of the same
+        /// ratio as exact-only rounds, on graphs with cycles.
+        #[test]
+        fn fast_path_matches_exact(
+            edges in proptest::collection::vec((0..4_u8, 0..4_u8, [cost(), cost()]), 1..9),
+        ) {
+            let net = net(edges);
+            let (fast, exact) = (dinkelbach(&net, false), dinkelbach(&net, true));
+            prop_assert_eq!(fast.is_some(), exact.is_some());
+            if let (Some(fast), Some(exact)) = (fast, exact) {
+                let ((n1, d1), (n2, d2)) = (ratio(&net, &fast), ratio(&net, &exact));
+                prop_assert_eq!(n1 * d2, n2 * d1);
+            }
+        }
+    }
 }

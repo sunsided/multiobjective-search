@@ -70,11 +70,11 @@ pub fn objective_correlation<C: ExactArith<Exact = BigUint>, const N: usize>(
     for cost in edges {
         let (first, second) = (cost[a].exact(), cost[b].exact());
         count += 1;
-        sxy = sxy + first.clone() * second.clone();
-        sxx = sxx + first.clone() * first.clone();
-        syy = syy + second.clone() * second.clone();
-        sx = sx + first;
-        sy = sy + second;
+        sxy += &first * &second;
+        sxx += &first * &first;
+        syy += &second * &second;
+        sx += first;
+        sy += second;
     }
 
     let n = BigUint::from(count);

@@ -61,7 +61,7 @@ fn slices(mut points: Vec<Vec<BigUint>>, reference: &[BigUint]) -> BigUint {
         }
 
         let base: Vec<Vec<BigUint>> = points[..=k].iter().map(|p| p[..d - 1].to_vec()).collect();
-        total = total + slices(base, &reference[..d - 1]) * height;
+        total += slices(base, &reference[..d - 1]) * height;
     }
 
     total
