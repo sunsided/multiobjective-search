@@ -310,13 +310,7 @@ impl<S: Clone + Ord, E: Clone, C: Scalar> Network<S, E, C> {
     /// Suurballe's algorithm from state 0 to `target`.
     fn suurballe(&self, target: &S) -> Option<(PathPair<S, E>, C)> {
         let t = *self.index.get(target)?;
-        let original = |u: usize| {
-            self.out[u]
-                .iter()
-                .map(|&a| (Step::Forward(a), self.arcs[a].2, self.arcs[a].3.clone()))
-                .collect()
-        };
-        let (dist, parent) = self.dijkstra(original);
+        let (dist, parent) = self.dijkstra(|u| self.original_steps(u));
         dist[t].as_ref()?;
         if t == 0 {
             return None;
@@ -337,41 +331,75 @@ impl<S: Clone + Ord, E: Clone, C: Scalar> Network<S, E, C> {
             reversed[self.arcs[a].2].push(a);
         }
 
-        let residual = |u: usize| {
-            let mut steps: Vec<(Step, usize, C)> = self.out[u]
-                .iter()
-                .filter(|a| !on_first.contains(a))
-                .map(|&a| {
-                    let (_, from, to, c) = &self.arcs[a];
-                    let (from, to) = (*from, *to);
-                    let reduced = dist[from]
-                        .as_ref()
-                        .expect("reachable")
-                        .plus(c)
-                        .distance(dist[to].as_ref().expect("reachable"));
-                    (Step::Forward(a), to, reduced)
-                })
-                .collect();
-            steps.extend(
-                reversed[u]
-                    .iter()
-                    .map(|&a| (Step::Backward(a), self.arcs[a].1, C::zero())),
-            );
-            steps
-        };
-        let (dist2, parent2) = self.dijkstra(residual);
+        let (dist2, parent2) =
+            self.dijkstra(|u| self.residual_steps(u, &dist, &on_first, &reversed));
         dist2[t].as_ref()?;
 
-        let mut used = on_first.clone();
-        for step in self.trace(&parent2, t) {
+        let used = Self::flow_union(on_first, self.trace(&parent2, t));
+
+        Some(self.pair_from_flow(&used, t))
+    }
+
+    /// The steps along the original edges out of `u`, at their costs.
+    fn original_steps(&self, u: usize) -> Vec<(Step, usize, C)> {
+        self.out[u]
+            .iter()
+            .map(|&a| (Step::Forward(a), self.arcs[a].2, self.arcs[a].3.clone()))
+            .collect()
+    }
+
+    /// The residual steps out of `u` after the first path: original edges
+    /// off that path at their reduced cost against `dist`, plus the first
+    /// path's edges into `u` (`reversed[u]`) backwards at zero cost.
+    fn residual_steps(
+        &self,
+        u: usize,
+        dist: &[Option<C>],
+        on_first: &BTreeSet<usize>,
+        reversed: &[Vec<usize>],
+    ) -> Vec<(Step, usize, C)> {
+        let mut steps: Vec<(Step, usize, C)> = self.out[u]
+            .iter()
+            .filter(|a| !on_first.contains(a))
+            .map(|&a| {
+                let (_, from, to, c) = &self.arcs[a];
+                let (from, to) = (*from, *to);
+                let reduced = dist[from]
+                    .as_ref()
+                    .expect("reachable")
+                    .plus(c)
+                    .distance(dist[to].as_ref().expect("reachable"));
+                (Step::Forward(a), to, reduced)
+            })
+            .collect();
+        steps.extend(
+            reversed[u]
+                .iter()
+                .map(|&a| (Step::Backward(a), self.arcs[a].1, C::zero())),
+        );
+
+        steps
+    }
+
+    /// The edges of the two-unit flow: the first path's edges `on_first`,
+    /// plus the second path's forward steps, minus the edges it cancels.
+    fn flow_union(mut on_first: BTreeSet<usize>, second: Vec<Step>) -> BTreeSet<usize> {
+        for step in second {
             match step {
-                Step::Forward(a) => used.insert(a),
-                Step::Backward(a) => used.remove(&a),
+                Step::Forward(a) => on_first.insert(a),
+                Step::Backward(a) => on_first.remove(&a),
             };
         }
 
+        on_first
+    }
+
+    /// Splits the two-unit flow `used` from state 0 to `t` into two
+    /// edge-disjoint paths, the lexicographically smaller first, with their
+    /// total cost.
+    fn pair_from_flow(&self, used: &BTreeSet<usize>, t: usize) -> (PathPair<S, E>, C) {
         let mut remaining: Vec<Vec<usize>> = alloc::vec![Vec::new(); self.states.len()];
-        for &a in &used {
+        for &a in used {
             remaining[self.arcs[a].1].push(a);
         }
 
@@ -399,7 +427,7 @@ impl<S: Clone + Ord, E: Clone, C: Scalar> Network<S, E, C> {
             core::mem::swap(&mut pair.first_edges, &mut pair.second_edges);
         }
 
-        Some((pair, total))
+        (pair, total)
     }
 
     /// Follows unused edges of `remaining` from state 0 to `t`, cutting any
