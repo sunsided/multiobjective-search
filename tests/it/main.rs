@@ -11,6 +11,7 @@ mod boa;
 mod boba;
 mod brute_force;
 mod check;
+mod correlation;
 mod dimacs;
 mod disjoint;
 mod dynamic;

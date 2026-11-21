@@ -98,6 +98,7 @@ mod boa;
 mod boba;
 mod bottleneck;
 mod constrained;
+mod correlation;
 mod cost;
 mod dimacs;
 mod disjoint;
@@ -144,6 +145,7 @@ pub use bottleneck::{
     minsum_maxmin_multi, quickest_path,
 };
 pub use constrained::constrained_shortest_path;
+pub use correlation::{Correlation, objective_correlation};
 pub use cost::{Dominates, add, weakly_dominates};
 pub use dimacs::{DimacsError, DimacsErrorKind, RoadGraph};
 pub use disjoint::{
