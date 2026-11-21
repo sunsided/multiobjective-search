@@ -20,6 +20,7 @@ fn main() {
     bench_two_objectives(&mut criterion);
     bench_anytime(&mut criterion);
     bench_suite(&mut criterion);
+    bench_anytime_apex(&mut criterion);
     bench_road(&mut criterion);
     bench_three_objectives(&mut criterion);
     bench_four_objectives(&mut criterion);
@@ -168,6 +169,58 @@ fn bench_four_objectives(c: &mut Criterion) {
     });
     group.bench_function("emoa_star_tree", |b| {
         b.iter(|| emoa_star_tree(&grid, ZeroHeuristic, black_box(0), is_goal));
+    });
+    group.finish();
+}
+
+/// Anytime A*pex to the exact front on a three-objective random grid with
+/// the paper's schedule (0.1, divided by `η = 4` each iteration, then 0),
+/// against restarting A*pex from scratch for every tolerance.
+fn bench_anytime_apex(c: &mut Criterion) {
+    use multiobjective_search::{AnytimeApex, apex_star_anytime_with, random_grid};
+
+    let (grid, (s, t)) = random_grid::<3>(7, 7, 5);
+    let schedule: Vec<[Epsilon; 3]> = [10, 40, 160, 640, 2560]
+        .into_iter()
+        .map(|den| [Epsilon::new(1, den); 3])
+        .chain([[Epsilon::ZERO; 3]])
+        .collect();
+    let mut group = c.benchmark_group("anytime_apex_grid3_7x7");
+    group.sample_size(10);
+
+    for (name, variant) in [
+        ("reuse", AnytimeApex::Reuse),
+        ("reuse_enh", AnytimeApex::ReuseEnhanced),
+        ("restart", AnytimeApex::Restart),
+        ("hybrid", AnytimeApex::Hybrid { threshold: 5 }),
+    ] {
+        group.bench_function(name, |b| {
+            b.iter(|| {
+                apex_star_anytime_with(
+                    &grid,
+                    ZeroHeuristic,
+                    black_box(s),
+                    |v| *v == t,
+                    schedule.iter().copied(),
+                    variant,
+                    |_, _| {},
+                    |_: &_| false,
+                )
+            });
+        });
+    }
+    group.bench_function("restart_apex_star", |b| {
+        b.iter(|| {
+            for eps in &schedule {
+                black_box(apex_star(
+                    &grid,
+                    ZeroHeuristic,
+                    black_box(s),
+                    |v| *v == t,
+                    *eps,
+                ));
+            }
+        });
     });
     group.finish();
 }

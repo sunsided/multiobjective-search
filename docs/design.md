@@ -437,6 +437,34 @@ NAMOA*dr 1.04 ms, parallel MOA* 1.70 ms, SIP-MOSP 2.9 to 4.2 ms; 24x24
 grid, two objectives — parallel BOBA* 2.7 ms, parallel MOA* 3.9 ms,
 SIP-MOSP 8.5 to 11 ms.
 
+### A-A*pex against Zhang et al. 2024
+
+H. Zhang, O. Salzman, A. Felner, C. Hernández Ulloa, S. Koenig. "A-A*pex:
+Efficient Anytime Approximate Multi-Objective Search." SoCS 2024. The
+first `apex_star_anytime` was written before the paper was available: it
+restarted A*pex for each tolerance, seeding it with the earlier
+solutions. It is replaced by the paper's Algorithm 2, which also recovers
+the paths merges and prunings drop; the paper's restart variant keeps the
+solutions across iterations too, so the seeding variant added nothing and
+is gone.
+
+| Paper rule | Here | Status |
+|---|---|---|
+| `findApproxPF` as restated in Algorithm 1: solutions are plain paths, a pair is pruned if a solution `ε`-dominates its `f` (all objectives) or `G^Tr_cl(s)` weakly dominates `Tr(g)`; greedy ε-bounded merging into an open pair at the state | same, greedy merges (as `apex_star`'s default) | matches |
+| `Pruned = {[s_start]}`; each iteration: `ε ← getNextEps()`, `Open` from `⟨c(π), π⟩` for `π ∈ Pruned`, `Pruned ← ∅`, `G^Tr_cl` reset (lines 38-46) | same; `getNextEps` is the caller's schedule (the paper: 0.1 divided by `η` per iteration) | matches |
+| Add `π` to `Pruned` when a solution prunes its pair but does not weakly dominate `c(π) + h` (lines 53-54) | same | matches |
+| Add `π` when a closed apex prunes its pair but that apex's representative does not weakly dominate `c(π)` (lines 57-59) | same; closed apexes keep their representatives | matches |
+| Add the representative a merge drops unless the kept one weakly dominates it (lines 68-70) | same | matches; removing it fails the tests |
+| Stop when an iteration leaves `Pruned` empty: the solutions are the Pareto front (Theorem 2, line 47) | same, possibly before the schedule ends; a schedule ending at zero always gets there | regression test `anytime_apex_stops_when_nothing_is_pruned`: the earlier variant ran the whole schedule |
+| Variants reuse, reuse-enh (prune by representatives' costs expanded in any iteration), restart, hybrid (restart until `#exp / #pruned > 5`) | `AnytimeApex::{Reuse (default), ReuseEnhanced, Restart, Hybrid { threshold }}` | matches |
+| `ε`-approximate front after each iteration (Theorem 1) | reported through `on_front` with the iteration's largest tolerance, zero once exact; `Budget` checked between iterations | matches |
+| Single goal | goal predicate | deliberate |
+
+Bench `anytime_apex_grid3_7x7` (3 objectives, schedule 0.1, 0.025, ...,
+then 0): reuse 0.40 ms, reuse-enh 0.34 ms, restart 0.58 ms, hybrid
+0.41 ms; the earlier seeding variant 1.35 ms; restarting A*pex from
+scratch for every tolerance 1.2 to 1.5 ms.
+
 ### Coverage of the Salzman et al. survey
 
 O. Salzman, C. Hernández Ulloa, A. Felner, S. Koenig. "Multi-Objective
@@ -451,7 +479,7 @@ Search: Algorithms, Applications, and Emerging Directions." arXiv
 | Negative edge costs (3.2; Ahmadi et al. 2024) | not implemented | `Cost` is unsigned by design (search-core) |
 | FPTAS (3.1; Warburton, Tsaggouris and Zaroliagis) | `fptas_constrained` | covered for the constrained path |
 | PP-A*, A*pex (3.2) | `pp_a_star`, `apex_star` | covered |
-| Anytime MOS: A-A*pex (3.2; Zhang et al. 2024) | `apex_star_anytime` for any `N`, `AnytimeFront<S, C, N>` (two objectives by default), plus `boa_star_anytime` and `pp_a_star_iterative` | **added**, without the A-A*pex paper: runs reuse every earlier solution as a known solution that prunes pairs it covers (full check in every objective, since seeds break A*pex's first-objective argument); merged pairs are not reused because their dropped paths are lost. Checked per report against brute force, falling factors, exact at zero; truncating the seed check fails the tests |
+| Anytime MOS: A-A*pex (3.2; Zhang et al. 2024) | `apex_star_anytime` / `apex_star_anytime_with` for any `N`, `AnytimeFront<S, C, N>` | **added**, following the paper; see the table below |
 | Correlation-aware approximation (3.2; Halle et al. 2025) | **detection added**: `objective_correlation`, the edge-level Pearson coefficient of the benchmark paper, exactly (sign and `ρ²` as a fraction of big integers) with threshold tests | neither the survey nor the benchmark paper defines how correlated objectives are merged (Halle et al.'s framework is not described there), so no merging step; checked against a floating-point Pearson coefficient |
 | Parallel MOS: objective-order portfolios with shared bounds, SIMD set dominance (3.2) | `parallel_moa_star`, `sip_mosp`, `boba_star_parallel` | covered except SIMD (the crate forbids `unsafe` and stays portable) |
 | Dynamic MOS, MO path-based D* Lite (3.2; Ren et al. 2022) | **added**: `DynamicGraph` (explicit edges that can be added, re-costed and removed, with `Graph`, `ReverseGraph` and `EdgeGraph`) and `DynamicSearch` | an LPA*-style repair over label correcting rather than MOPBD*'s path-based keys: labels built on a changed edge are dropped with their subtree, the states that lost labels are re-seeded from their predecessors' live labels, and label correcting runs from there; after every change of random change sequences the front equals a fresh NAMOA*, and skipping the invalidation fails the tests |

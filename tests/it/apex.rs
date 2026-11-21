@@ -208,17 +208,39 @@ fn check_anytime<const N: usize>(
     schedule: &[[Epsilon; N]],
     limit: Option<usize>,
 ) -> Result<(), TestCaseError> {
-    use multiobjective_search::{ApproxFactor, Stats, apex_star_anytime};
+    use multiobjective_search::AnytimeApex;
+
+    for variant in [
+        AnytimeApex::Reuse,
+        AnytimeApex::ReuseEnhanced,
+        AnytimeApex::Restart,
+        AnytimeApex::Hybrid { threshold: 5 },
+    ] {
+        check_variant(problem, schedule, limit, variant)?;
+    }
+
+    Ok(())
+}
+
+/// [`check_anytime`] for one variant.
+fn check_variant<const N: usize>(
+    problem: &Problem<N>,
+    schedule: &[[Epsilon; N]],
+    limit: Option<usize>,
+    variant: multiobjective_search::AnytimeApex,
+) -> Result<(), TestCaseError> {
+    use multiobjective_search::{ApproxFactor, Stats, apex_star_anytime_with};
 
     let front = pareto_costs(problem);
     let goal = |v: &usize| problem.goals[*v];
     let mut reports: Vec<(Vec<[u32; N]>, ApproxFactor<u32>)> = Vec::new();
-    let result = apex_star_anytime(
+    let result = apex_star_anytime_with(
         &problem.graph,
         ZeroHeuristic,
         problem.start,
         goal,
         schedule.iter().copied(),
+        variant,
         |s, f| reports.push((s.iter().map(|x| x.cost).collect(), f)),
         move |stats: &Stats| limit.is_some_and(|l| stats.expanded >= l),
     );
@@ -246,6 +268,9 @@ fn check_anytime<const N: usize>(
     if result.complete {
         let costs: Vec<_> = result.solutions.iter().map(|s| s.cost).collect();
         prop_assert_eq!(costs, front);
+        prop_assert!(result.factor.is_zero());
+    } else {
+        prop_assert!(limit.is_some(), "a schedule ending at zero completes");
     }
 
     check_paths(
@@ -270,4 +295,36 @@ proptest! {
         check_anytime(&scaled(p2), &s2, limit)?;
         check_anytime(&scaled(p3), &s3, limit)?;
     }
+}
+
+/// Regression: A-A*pex stops as soon as an iteration leaves no pruned path
+/// (Theorem 2), here after the first, loose iteration on a graph with a
+/// single route, although the schedule goes on; the earlier variant ran
+/// the whole schedule down to zero.
+#[test]
+fn anytime_apex_stops_when_nothing_is_pruned() {
+    use multiobjective_search::apex_star_anytime;
+
+    let graph = EdgeList {
+        nodes: 2,
+        edges: vec![(0, 1, [3, 4])],
+    };
+    let schedule = [
+        [Epsilon::new(1, 2); 2],
+        [Epsilon::new(1, 4); 2],
+        [Epsilon::ZERO; 2],
+    ];
+    let mut reports = 0;
+    let result = apex_star_anytime(
+        &graph,
+        ZeroHeuristic,
+        0,
+        |v: &usize| *v == 1,
+        schedule,
+        |_, _| reports += 1,
+        |_: &multiobjective_search::Stats| false,
+    );
+    assert!(result.complete && result.factor.is_zero());
+    assert_eq!(reports, 1);
+    assert_eq!(result.stats.expanded, 1);
 }

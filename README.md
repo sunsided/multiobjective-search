@@ -16,8 +16,9 @@ reference on random graphs with two to four objectives:
       baseline (`boa_star_anytime_basic`); reports each improved front and its
       exact factor (`ApproxFactor`) to a callback and stops on a budget
 - [x] Iterative-PP-A\*: the anytime baseline over PP-A\* (`pp_a_star_iterative`)
-- [x] Anytime A\*pex for any number of objectives (`apex_star_anytime`), reusing
-      earlier runs' solutions; `AnytimeFront` takes the objective count
+- [x] A-A\*pex, anytime A\*pex for any number of objectives (`apex_star_anytime`,
+      `AnytimeApex` variants reuse, reuse-enh, restart, hybrid), after Zhang et al.
+      2024; `AnytimeFront` takes the objective count
 - [x] PP-A\*: path pairs, tolerances on both objectives (`pp_a_star`); one-sided
       bounded test and `br` returned, so the tolerances never compound
 - [x] A\*pex: approximate search for any number of objectives over

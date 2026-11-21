@@ -134,7 +134,9 @@ pub use anytime_boa::{
     AnytimeFront, ApproxFactor, WeightedSum, boa_star_anytime, boa_star_anytime_basic,
     boa_star_anytime_ws,
 };
-pub use apex::{MergeRule, apex_star, apex_star_anytime, apex_star_with};
+pub use apex::{
+    AnytimeApex, MergeRule, apex_star, apex_star_anytime, apex_star_anytime_with, apex_star_with,
+};
 pub use benchmarks::{
     BenchmarkGraph, Query, guards_grid, netmaker, netmaker_queries, random_grid, road_extended,
 };
