@@ -173,5 +173,4 @@ without any additional terms or conditions.
 
 ## Contributing
 
-See [CONTRIBUTING.md](https://github.com/sunsided/multiobjective-search/blob/main/CONTRIBUTING.md). Local development expects
-[`search-core`](https://github.com/sunsided/search-core) checked out next to this repository.
+See [CONTRIBUTING.md](https://github.com/sunsided/multiobjective-search/blob/main/CONTRIBUTING.md).
