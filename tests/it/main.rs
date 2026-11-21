@@ -14,6 +14,7 @@ mod check;
 mod correlation;
 mod dimacs;
 mod disjoint;
+mod dominance;
 mod dynamic;
 mod fixtures;
 mod front;
