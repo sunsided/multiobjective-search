@@ -363,7 +363,7 @@ fn parse_gr(text: &str) -> Result<GrFile, DimacsError> {
                 }
 
                 let parsed = parse_gr_header(fields).ok_or(error(DimacsErrorKind::Malformed))?;
-                arcs.reserve(parsed.1);
+                arcs.reserve(parsed.1.min(max_arc_lines(text)));
                 header = Some(parsed);
             }
             Some("a") => {
@@ -401,6 +401,14 @@ fn parse_gr(text: &str) -> Result<GrFile, DimacsError> {
     }
 
     Ok(GrFile { nodes, arcs })
+}
+
+/// An upper bound on the arc lines `text` can hold, so a problem line that
+/// declares billions of arcs cannot reserve more memory than the file
+/// could fill. The shortest arc line, `a 1 1 0` plus its newline, has 8
+/// bytes.
+fn max_arc_lines(text: &str) -> usize {
+    text.len() / 8 + 1
 }
 
 /// Parses the fields after `p` of a `.gr` problem line: `sp <nodes> <arcs>`.
@@ -625,6 +633,21 @@ mod tests {
         assert_eq!(
             co("p aux sp co 3\nv 1 2\n").kind,
             DimacsErrorKind::Malformed
+        );
+    }
+
+    /// A problem line that declares more arcs than the file holds is an
+    /// arc-count error, not an allocation of the declared size (found by the
+    /// `dimacs_parse` fuzz target).
+    #[test]
+    fn huge_declared_arc_count() {
+        let e = RoadGraph::from_dimacs("p sp 6 4000000000\n", TIME).unwrap_err();
+        assert_eq!(
+            e.kind,
+            DimacsErrorKind::ArcCount {
+                expected: 4_000_000_000,
+                found: 0
+            }
         );
     }
 
