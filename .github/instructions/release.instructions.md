@@ -13,9 +13,8 @@ applyTo: "**/Cargo.toml,release-plz.toml,.github/workflows/release-plz.yml,**/CH
   are not published (the fuzz crate) have `publish = false`.
 - The single crate `multiobjective-search` is tagged `vX.Y.Z`.
 - New dependencies must pass `cargo deny check`: allowed licenses, no advisories, no git or
-  unknown-registry sources. The only runtime dependency is `search-core`
-  (`path = "../search-core"` plus a `version`, so the published crate resolves it from
-  crates.io); adding another needs a reason in the PR. Bump the `search-core` requirement when
+  unknown-registry sources. The only runtime dependency is `search-core` (from crates.io,
+  never by `path`); adding another needs a reason in the PR. Bump the `search-core` requirement when
   the code uses API from a newer release.
 - `rust-version` is a signal, not a contract. Raising it is allowed when a dependency or a
   feature benefits. It needs a minor release and a changelog note, never a patch release.

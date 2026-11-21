@@ -6,8 +6,9 @@ Path-specific rules live in `.github/instructions/*.instructions.md`.
 
 - Run checks through the Taskfile: `task ci` mirrors CI. `task lint`, `task test` and
   `task doc` are the common entry points.
-- `search-core` is a path dependency (`../search-core`): local builds and CI need it checked
-  out next to this repository.
+- `search-core` is a crates.io dependency. CI resolves it from crates.io; local development
+  may build against a sibling checkout through an untracked hub `.cargo/config.toml`
+  (`[patch.crates-io]`) one directory above this repository.
 - Every item gets a doc comment, private items included. No `mod.rs` files (use `foo.rs`
   plus `foo/`). No `// ----` separator comments (split the file into modules instead).
 - `clippy::pedantic` must stay clean. Suppress only with

@@ -25,16 +25,13 @@ applyTo: ".github/workflows/**,Taskfile.dist.yaml,**/Taskfile.dist.yaml,.pre-com
   `deny`, `msrv`, `semver`, `fuzz`, plus `actionlint` and `zizmor` in `actions-lint.yml`.
 - `msrv` checks every target, tests and benches included, on the declared `rust-version`
   (`cargo hack check --rust-version --all-targets --all-features`).
-- Jobs that build check the crate out into `multiobjective-search/` and the path dependency
-  `search-core` next to it, through `.github/actions/checkout-siblings` (loaded with the
-  self-repository form `uses: $/...`). `run:` steps default to the crate directory; `uses:`
-  steps that read the crate (rust-cache, codecov, cargo-deny, semver-checks, release-plz) get
-  its path explicitly. A new sibling path dependency adds a step to that action.
-- `cargo fmt` runs without `--all`, which would also format the sibling repository.
+- `search-core` is a plain crates.io dependency: no sibling checkout, no subdirectory
+  layout, no `working-directory` defaults.
 - `fuzz/` is a separate nightly workspace. Its tasks live in `fuzz/Taskfile.dist.yaml`,
   included as `fuzz:`; CI's `fuzz` job mirrors `task fuzz:build` and `task fuzz:lint`.
-- `Cargo.lock` is tracked, but no step uses `--locked`: the lock records `search-core`'s
-  version, which moves with the sibling's default branch.
+- `Cargo.lock` and `fuzz/Cargo.lock` are tracked and record `search-core` from crates.io
+  (`source = "registry+..."`, with checksum). The publish workflow uses `--locked`. Never
+  commit a lock rewritten under the local hub `[patch.crates-io]`: it records a path source.
 - `scripts/check-branch.sh` is the single definition of allowed branch names. It is used by
   the Taskfile, the hook and the CI `branch` job.
 - New jobs that should gate merges must also be added to branch protection. Mention that in

@@ -5,9 +5,21 @@ needs before it can be merged.
 
 ## Setup
 
-1. Check out [search-core](https://github.com/sunsided/search-core) next to this repository
-   (`../search-core`). It is a path dependency, so Cargo, the Taskfile and the hooks fail
-   without it. CI does the same through `.github/actions/checkout-siblings`.
+1. [search-core](https://github.com/sunsided/search-core) is a regular crates.io dependency
+   (`search-core = "0.3"`), and CI and Dependabot resolve it from crates.io. To develop
+   against a local checkout of it, clone the planning crates side by side under one hub
+   directory and put an untracked `.cargo/config.toml` in that hub (not in this
+   repository):
+
+   ```toml
+   [patch.crates-io]
+   search-core = { path = "search-core" }
+   ```
+
+   Every crate below the hub then builds against the sibling working tree. A patch whose
+   version does not match the requirement is unused (cargo warns), and crates.io is used.
+   The tracked `Cargo.lock` must keep recording search-core from crates.io: do not commit
+   a lock that `cargo` rewrote while the patch was active.
 2. Install Rust via [rustup](https://rustup.rs/). Development uses current stable; the MSRV
    in `Cargo.toml` (`rust-version`) is checked for every target, tests and benches included.
 3. Install [Task](https://taskfile.dev/installation/). All commands below go through it. Run
