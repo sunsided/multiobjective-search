@@ -65,6 +65,8 @@ reference on random graphs with two to four objectives:
 - [x] From the Salzman et al. survey: multi-objective label correcting
       (`label_correcting`), the ideal-point heuristic (`IdealPoint`) and
       differential heuristics (`DifferentialHeuristic`)
+- [x] Dynamic search (`DynamicGraph`, `DynamicSearch`): incremental repair after
+      edge additions, cost changes and removals
 - [x] Brute-force reference over simple paths (`brute_force`)
 - [x] Pareto frontier for any number of objectives, `O(log n)` queries for two
       (`Front`, `BiFront`)

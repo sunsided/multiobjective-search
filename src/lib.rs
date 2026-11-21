@@ -37,6 +37,7 @@
 //! | [`disjoint_pair`] | scalar | none | Suurballe: the cheapest edge- or state-disjoint pair; [`supported_disjoint_pairs`] for two objectives, [`disjoint_pair_front`] for the full bi-objective front, [`maximally_disjoint_pairs`] for cost against shared edges, [`dissimilar_paths`] for k dissimilar paths. Needs an [`EdgeGraph`]. |
 //! | [`aggregated_search`] | `M` hidden, `K` solution | admissible in the hidden space | Objective-aggregation functions over hidden objectives, exact or ε-approximate. |
 //! | [`label_correcting`] | any `N` | none | Multi-objective label correcting (Guerriero and Musmanno). |
+//! | [`DynamicSearch`] | any `N` | none | Dynamic MOS: incremental repair after edge changes on a [`DynamicGraph`]. |
 //! | [`brute_force`] | any `N` | none | Exhaustive reference for tests on small graphs. |
 //!
 //! Supporting types:
@@ -100,6 +101,7 @@ mod constrained;
 mod cost;
 mod dimacs;
 mod disjoint;
+mod dynamic;
 mod emoa;
 mod encode;
 mod epsilon;
@@ -148,6 +150,7 @@ pub use disjoint::{
     CostedPair, Disjointness, PathPair, RankedPath, SharedPair, disjoint_pair, disjoint_pair_front,
     dissimilar_paths, maximally_disjoint_pairs, supported_disjoint_pairs,
 };
+pub use dynamic::{DynamicGraph, DynamicSearch};
 pub use emoa::{emoa_star, emoa_star_tree};
 pub use encode::{KnapsackGraph, LabelCount};
 pub use epsilon::Epsilon;

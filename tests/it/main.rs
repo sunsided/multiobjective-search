@@ -13,6 +13,7 @@ mod brute_force;
 mod check;
 mod dimacs;
 mod disjoint;
+mod dynamic;
 mod fixtures;
 mod front;
 mod heuristics;
