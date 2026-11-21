@@ -67,6 +67,9 @@ reference on random graphs with two to four objectives:
       differential heuristics (`DifferentialHeuristic`)
 - [x] Dynamic search (`DynamicGraph`, `DynamicSearch`): incremental repair after
       edge additions, cost changes and removals
+- [x] Multi-objective minimum spanning trees (`pareto_spanning_trees`,
+      `two_phase_spanning_trees`) and exact objective correlation
+      (`objective_correlation`)
 - [x] Brute-force reference over simple paths (`brute_force`)
 - [x] Pareto frontier for any number of objectives, `O(log n)` queries for two
       (`Front`, `BiFront`)

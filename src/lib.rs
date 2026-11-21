@@ -38,6 +38,7 @@
 //! | [`aggregated_search`] | `M` hidden, `K` solution | admissible in the hidden space | Objective-aggregation functions over hidden objectives, exact or ε-approximate. |
 //! | [`label_correcting`] | any `N` | none | Multi-objective label correcting (Guerriero and Musmanno). |
 //! | [`DynamicSearch`] | any `N` | none | Dynamic MOS: incremental repair after edge changes on a [`DynamicGraph`]. |
+//! | [`pareto_spanning_trees`] | any `N` | none | Multi-objective minimum spanning trees; [`two_phase_spanning_trees`] for two objectives. |
 //! | [`brute_force`] | any `N` | none | Exhaustive reference for tests on small graphs. |
 //!
 //! Supporting types:
@@ -125,6 +126,7 @@ mod reference;
 mod reference_point;
 #[cfg(feature = "parallel")]
 mod sip;
+mod spanning;
 mod two_phase;
 
 pub use aggregate::{Aggregated, Aggregation, aggregated_search};
@@ -175,4 +177,7 @@ pub use reference_point::{Achievement, ReferencePoint, achievement};
 pub use search_core::{Cost, Heuristic, HeuristicFn, heuristic_fn};
 #[cfg(feature = "parallel")]
 pub use sip::{SipConfig, sip_mosp};
+pub use spanning::{
+    Tree, TreeEdge, pareto_spanning_trees, supported_spanning_trees, two_phase_spanning_trees,
+};
 pub use two_phase::{supported_solutions, two_phase};

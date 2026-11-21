@@ -27,4 +27,5 @@ mod parallel_moa;
 mod reference;
 #[cfg(feature = "parallel")]
 mod sip;
+mod spanning;
 mod survey;

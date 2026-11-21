@@ -461,7 +461,7 @@ Search: Algorithms, Applications, and Emerging Directions." arXiv
 | Differential heuristics, bi-objective DHs (3.2; Goldberg and Harrelson, Zhang et al. 2023) | `DifferentialHeuristic` | **added** in the per-objective single-valued form; tested admissible, consistent toward reachable goals, and exact fronts with NAMOA*; the multi-valued BO-DH variant is not implemented |
 | MOSSP, MOMDP, MORL (2.3, 3.3) | not implemented | stochastic models, outside deterministic graph search |
 | MOS with objective aggregation (4) | `aggregated_search` | covered |
-| Multi-objective MST (4) | not implemented | a different combinatorial problem |
+| Multi-objective MST (4; Hamacher and Ruhe 1994, Ramos et al. 1998) | **added**: `pareto_spanning_trees` (any `N`, branch and bound with per-objective Kruskal lower bounds) and `two_phase_spanning_trees` with `supported_spanning_trees` (dichotomic weighted-sum Kruskal compared exactly through `ExactArith`, then branch and bound inside each triangle) | cross-checked against enumeration of all edge subsets, phase 1 against the hull vertices |
 | MO-MAPF (4) | not here | belongs to the `mapf-search` crate |
 | Benchmarks (5) | `benchmarks.rs` | covered by the Peer et al. generators |
 | Preference elicitation, interactive search (6) | `ReferencePoint` | covered as a library API |
