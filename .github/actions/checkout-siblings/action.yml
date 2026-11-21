@@ -1,0 +1,28 @@
+# Checks out this crate into $GITHUB_WORKSPACE/multiobjective-search and the sibling crates it
+# depends on by path (`path = "../<sibling>"`) next to it: Cargo fails on a missing path
+# dependency even when it has a `version`. Callers use the self-repository form
+# (`uses: $/.github/actions/checkout-siblings`), which loads this file from the running commit
+# without a prior checkout. Siblings use their default branch. Add one step per new sibling;
+# private siblings need `token: ${{ secrets.SIBLING_REPOS_TOKEN }}`.
+name: Check out crate and siblings
+description: Check out this crate and its path-dependency sibling repositories side by side
+
+inputs:
+  fetch-depth:
+    description: History depth for this crate's checkout (0 for all history and tags)
+    default: "1"
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        path: multiobjective-search
+        fetch-depth: ${{ inputs.fetch-depth }}
+        persist-credentials: false
+
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        repository: sunsided/search-core
+        path: search-core
+        persist-credentials: false
