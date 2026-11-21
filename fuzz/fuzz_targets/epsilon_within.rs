@@ -32,6 +32,7 @@ fuzz_target!(|input: (u32, u32, u32, u32, u64, u64)| {
     let Some(den) = den.checked_add(1) else {
         return;
     };
+
     if num.checked_add(den).is_none() {
         return;
     }

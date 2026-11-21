@@ -21,7 +21,7 @@ applyTo: ".github/workflows/**,Taskfile.dist.yaml,**/Taskfile.dist.yaml,.pre-com
 - Do not rename `publish-crates-io.yml` or its `crates-io` environment. crates.io trusted publishing is
   bound to both. Deploy jobs run in their own tag-restricted environment, and `needs:` a
   verification job.
-- CI jobs: `branch`, `fmt`, `clippy`, `style`, `doc`, `test` (Linux only), `coverage`,
+- CI jobs: `branch`, `fmt`, `clippy`, `style`, `doc`, `test` (Linux, macOS and Windows), `coverage`,
   `deny`, `msrv`, `semver`, `fuzz`, plus `actionlint` and `zizmor` in `actions-lint.yml`.
 - `msrv` checks every target, tests and benches included, on the declared `rust-version`
   (`cargo hack check --rust-version --all-targets --all-features`).
