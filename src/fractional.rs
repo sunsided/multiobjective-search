@@ -6,19 +6,17 @@
 //! Soroush 2008 (linear fractional path problem).
 
 mod big;
-mod signed;
 
 use alloc::collections::BTreeMap;
 use alloc::vec::Vec;
 use core::cmp::Ordering;
 
-use search_core::Cost;
+use search_core::{BigInt, BigUint, Cost, ExactNumber};
 
 use crate::graph::Graph;
 use crate::output::Solution;
 
 use big::Big;
-use signed::Signed;
 
 /// The path from `start` to a goal that minimizes `Σ c1 / Σ c2` among
 /// those with `Σ c2 > 0`; `None` if there is no such path. Goal states end
@@ -29,7 +27,8 @@ use signed::Signed;
 /// `den · c1 - num · c2`; if that is negative, its ratio is smaller and
 /// becomes the next `λ`, else `λ` is optimal. The first round uses `-c2`
 /// alone to find some path with a positive denominator. The weights are
-/// signed, so they are summed in a local 256-bit signed integer, exactly.
+/// signed, so they are summed as search-core [`BigInt`]s, exactly and
+/// without a width limit.
 /// Each round is a Bellman-Ford pass over the reachable graph when the
 /// weights have no negative cycle, and an exhaustive search over simple
 /// paths when they do (the inner problem is then NP-hard, as Soroush
@@ -72,19 +71,21 @@ where
 {
     let net = Explicit::explore(graph, start, &is_goal);
     // λ = num / den; the first round, den = 0, maximizes c2.
-    let (mut num, mut den) = (1_u128, 0_u128);
+    let (mut num, mut den) = (BigUint::one(), BigUint::zero());
     let mut best: Option<Vec<usize>> = None;
 
     loop {
-        let weight =
-            |w: &[C; 2]| Signed::scaled(den, w[0].into()).minus(Signed::scaled(num, w[1].into()));
+        let exact = |c: C| BigUint::from(u128::from(c.into()));
+        let weight = |w: &[C; 2]| {
+            BigInt::from(den.clone() * exact(w[0])) - BigInt::from(num.clone() * exact(w[1]))
+        };
         let (value, path) = net.minimum(weight)?;
-        if value >= Signed::ZERO {
+        if value >= BigInt::zero() {
             break;
         }
 
         let [c1, c2] = net.totals(&path);
-        if c2 == 0 {
+        if c2 == BigUint::zero() {
             break;
         }
 
@@ -98,7 +99,7 @@ where
 /// The outcome of a Bellman-Ford pass.
 enum Relaxed {
     /// No negative cycle: the best goal path, if any.
-    Done(Option<(Signed, Vec<usize>)>),
+    Done(Option<(BigInt, Vec<usize>)>),
     /// A negative cycle is reachable.
     NegativeCycle,
 }
@@ -152,8 +153,8 @@ impl<S: Clone + Ord, C: Cost + Into<u64>> Explicit<S, C> {
 
     /// The simple goal path of smallest total `weight`, as edge indices,
     /// with its weight; `None` if no goal is reachable.
-    fn minimum(&self, weight: impl Fn(&[C; 2]) -> Signed) -> Option<(Signed, Vec<usize>)> {
-        let weights: Vec<Signed> = self.edges.iter().map(|e| weight(&e.2)).collect();
+    fn minimum(&self, weight: impl Fn(&[C; 2]) -> BigInt) -> Option<(BigInt, Vec<usize>)> {
+        let weights: Vec<BigInt> = self.edges.iter().map(|e| weight(&e.2)).collect();
         match self.bellman_ford(&weights) {
             Relaxed::Done(found) => found,
             Relaxed::NegativeCycle => self.exhaustive(&weights),
@@ -162,18 +163,18 @@ impl<S: Clone + Ord, C: Cost + Into<u64>> Explicit<S, C> {
 
     /// Bellman-Ford from the start; `None` if a negative cycle is
     /// reachable, else the best goal path.
-    fn bellman_ford(&self, weights: &[Signed]) -> Relaxed {
+    fn bellman_ford(&self, weights: &[BigInt]) -> Relaxed {
         let n = self.states.len();
-        let mut dist: Vec<Option<Signed>> = alloc::vec![None; n];
+        let mut dist: Vec<Option<BigInt>> = alloc::vec![None; n];
         let mut parent: Vec<Option<usize>> = alloc::vec![None; n];
-        dist[0] = Some(Signed::ZERO);
+        dist[0] = Some(BigInt::zero());
 
         for round in 0..=n {
             let mut changed = false;
             for (k, &(from, to, _)) in self.edges.iter().enumerate() {
-                let Some(d) = dist[from] else { continue };
-                let candidate = d.plus(weights[k]);
-                if dist[to].is_none_or(|current| candidate < current) {
+                let Some(d) = &dist[from] else { continue };
+                let candidate = d.clone() + weights[k].clone();
+                if dist[to].as_ref().is_none_or(|current| candidate < *current) {
                     if round == n {
                         return Relaxed::NegativeCycle;
                     }
@@ -191,7 +192,7 @@ impl<S: Clone + Ord, C: Cost + Into<u64>> Explicit<S, C> {
 
         let best = (0..n)
             .filter(|&v| self.goal[v])
-            .filter_map(|v| dist[v].map(|d| (d, v)))
+            .filter_map(|v| dist[v].clone().map(|d| (d, v)))
             .min_by(|a, b| a.0.cmp(&b.0));
         Relaxed::Done(best.map(|(d, v)| {
             let mut path = Vec::new();
@@ -208,11 +209,18 @@ impl<S: Clone + Ord, C: Cost + Into<u64>> Explicit<S, C> {
 
     /// Exhaustive search over simple paths, for weights with negative
     /// cycles.
-    fn exhaustive(&self, weights: &[Signed]) -> Option<(Signed, Vec<usize>)> {
-        let mut best: Option<(Signed, Vec<usize>)> = None;
+    fn exhaustive(&self, weights: &[BigInt]) -> Option<(BigInt, Vec<usize>)> {
+        let mut best: Option<(BigInt, Vec<usize>)> = None;
         let mut visited = alloc::vec![false; self.states.len()];
         let mut path = Vec::new();
-        self.descend(0, Signed::ZERO, weights, &mut visited, &mut path, &mut best);
+        self.descend(
+            0,
+            &BigInt::zero(),
+            weights,
+            &mut visited,
+            &mut path,
+            &mut best,
+        );
         best
     }
 
@@ -220,15 +228,15 @@ impl<S: Clone + Ord, C: Cost + Into<u64>> Explicit<S, C> {
     fn descend(
         &self,
         at: usize,
-        sum: Signed,
-        weights: &[Signed],
+        sum: &BigInt,
+        weights: &[BigInt],
         visited: &mut [bool],
         path: &mut Vec<usize>,
-        best: &mut Option<(Signed, Vec<usize>)>,
+        best: &mut Option<(BigInt, Vec<usize>)>,
     ) {
         if self.goal[at] {
-            if best.as_ref().is_none_or(|(b, _)| sum < *b) {
-                *best = Some((sum, path.clone()));
+            if best.as_ref().is_none_or(|(b, _)| sum < b) {
+                *best = Some((sum.clone(), path.clone()));
             }
 
             return;
@@ -238,7 +246,14 @@ impl<S: Clone + Ord, C: Cost + Into<u64>> Explicit<S, C> {
         for (k, &(from, to, _)) in self.edges.iter().enumerate() {
             if from == at && !visited[to] {
                 path.push(k);
-                self.descend(to, sum.plus(weights[k]), weights, visited, path, best);
+                self.descend(
+                    to,
+                    &(sum.clone() + weights[k].clone()),
+                    weights,
+                    visited,
+                    path,
+                    best,
+                );
                 path.pop();
             }
         }
@@ -246,15 +261,14 @@ impl<S: Clone + Ord, C: Cost + Into<u64>> Explicit<S, C> {
         visited[at] = false;
     }
 
-    /// The summed costs of a path, as `u128`.
-    fn totals(&self, path: &[usize]) -> [u128; 2] {
-        path.iter().fold([0, 0], |s, &k| {
-            let w = self.edges[k].2;
-            [
-                s[0] + u128::from(w[0].into()),
-                s[1] + u128::from(w[1].into()),
-            ]
-        })
+    /// The summed costs of a path, exactly.
+    fn totals(&self, path: &[usize]) -> [BigUint; 2] {
+        let exact = |c: C| BigUint::from(u128::from(c.into()));
+        path.iter()
+            .fold([BigUint::zero(), BigUint::zero()], |[a, b], &k| {
+                let w = self.edges[k].2;
+                [a + exact(w[0]), b + exact(w[1])]
+            })
     }
 
     /// The solution for a path of edge indices.

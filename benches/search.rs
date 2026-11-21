@@ -22,6 +22,7 @@ fn main() {
     bench_suite(&mut criterion);
     bench_anytime_apex(&mut criterion);
     report_spread();
+    bench_ratios(&mut criterion);
     bench_road(&mut criterion);
     bench_three_objectives(&mut criterion);
     bench_four_objectives(&mut criterion);
@@ -170,6 +171,79 @@ fn bench_four_objectives(c: &mut Criterion) {
     });
     group.bench_function("emoa_star_tree", |b| {
         b.iter(|| emoa_star_tree(&grid, ZeroHeuristic, black_box(0), is_goal));
+    });
+    group.finish();
+}
+
+/// A layered DAG: `layers` layers of `width` states, every state joined
+/// to every state of the next layer, pseudo-random costs; state 0 is the
+/// start, the last state the goal.
+struct Layers {
+    /// States per layer.
+    width: u32,
+    /// Number of layers.
+    layers: u32,
+}
+
+impl Graph for Layers {
+    type State = u32;
+    type Weight = [u32; 2];
+
+    fn successors(&self, state: &u32, out: &mut Vec<(u32, [u32; 2])>) {
+        let layer = state / self.width;
+        if layer + 1 >= self.layers {
+            return;
+        }
+
+        for k in 0..self.width {
+            let next = (layer + 1) * self.width + k;
+            out.push((next, Grid::<2>::cost(*state, next)));
+        }
+    }
+}
+
+/// `Layers` with the second cost read as a reliability `(10 - c, 10)`.
+struct Reliable<'a>(&'a Layers);
+
+impl Graph for Reliable<'_> {
+    type State = u32;
+    type Weight = (u32, (u32, u32));
+
+    fn successors(&self, state: &u32, out: &mut Vec<(u32, (u32, (u32, u32)))>) {
+        let mut edges = Vec::new();
+        self.0.successors(state, &mut edges);
+        out.extend(edges.into_iter().map(|(t, w)| (t, (w[0], (11 - w[1], 10)))));
+    }
+}
+
+/// The linear fractional path (Dinkelbach, Bellman-Ford rounds on a DAG and
+/// exhaustive rounds on a small grid with negative cycles) and the
+/// cost/reliability path.
+fn bench_ratios(c: &mut Criterion) {
+    use multiobjective_search::{min_cost_reliability_ratio, min_ratio_path, random_grid};
+
+    let dag = Layers {
+        width: 6,
+        layers: 30,
+    };
+    let goal = 6 * 30 - 1;
+    let (grid, (s, t)) = random_grid::<2>(3, 3, 4);
+    let mut group = c.benchmark_group("ratios");
+    group.sample_size(20);
+    group.bench_function("min_ratio_path_dag", |b| {
+        b.iter(|| min_ratio_path(&dag, black_box(0), |v| *v == goal));
+    });
+    group.bench_function("min_ratio_path_grid3x3", |b| {
+        b.iter(|| min_ratio_path(&grid, black_box(s), |v| *v == t));
+    });
+
+    let small = Layers {
+        width: 4,
+        layers: 8,
+    };
+    let goal = 4 * 8 - 1;
+    group.bench_function("min_cost_reliability_ratio_dag", |b| {
+        b.iter(|| min_cost_reliability_ratio(&Reliable(&small), black_box(0), |v| *v == goal));
     });
     group.finish();
 }
