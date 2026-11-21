@@ -19,7 +19,7 @@ std = []
 parallel = ["std"]
 
 [dependencies]
-search-core = { path = "../search-core", version = "0.0.0" }
+search-core = { path = "../search-core", version = ">=0.0.0, <0.2" }
 
 [lints.rust]
 missing_docs = "warn"
