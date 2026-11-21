@@ -47,6 +47,50 @@ fn small(x: usize) -> u32 {
     u32::try_from(x).expect("small graphs")
 }
 
+/// Checks that the repaired front of `search` equals a fresh NAMOA* on its
+/// current graph, and that every path is real; `ids` are all edge ids ever
+/// added, live or removed.
+fn compare<P, const N: usize>(
+    problem: &Problem<N>,
+    search: &DynamicSearch<u32, P, N>,
+    ids: &[usize],
+) -> Result<(), TestCaseError>
+where
+    P: Fn(&u32) -> bool,
+{
+    let fresh = namoa_star(
+        search.graph(),
+        ZeroHeuristic,
+        small(problem.start),
+        |s: &u32| problem.goals[*s as usize],
+    );
+    let got = search.front();
+    let costs = |o: &Output<u32, [u32; N]>| o.solutions.iter().map(|s| s.cost).collect::<Vec<_>>();
+    prop_assert_eq!(costs(&got), costs(&fresh));
+
+    let current = Problem {
+        graph: snapshot(search.graph(), ids),
+        start: problem.start,
+        goals: problem.goals.clone(),
+    };
+    let solutions = got
+        .solutions
+        .iter()
+        .map(|s| multiobjective_search::Solution {
+            cost: s.cost,
+            path: s.path.iter().map(|&v| v as usize).collect(),
+        })
+        .collect();
+
+    check_paths(
+        &current,
+        &Output {
+            solutions,
+            stats: got.stats,
+        },
+    )
+}
+
 /// Applies `changes` one by one and checks the front after each.
 fn check<const N: usize>(problem: &Problem<N>, changes: &[Change<N>]) -> Result<(), TestCaseError> {
     let mut graph = DynamicGraph::new(small(problem.graph.nodes));
@@ -61,40 +105,7 @@ fn check<const N: usize>(problem: &Problem<N>, changes: &[Change<N>]) -> Result<
         goals[*s as usize]
     });
 
-    let compare = |search: &DynamicSearch<u32, _, N>, ids: &[usize]| -> Result<(), TestCaseError> {
-        let fresh = namoa_star(
-            search.graph(),
-            ZeroHeuristic,
-            small(problem.start),
-            |s: &u32| problem.goals[*s as usize],
-        );
-        let got = search.front();
-        let costs =
-            |o: &Output<u32, [u32; N]>| o.solutions.iter().map(|s| s.cost).collect::<Vec<_>>();
-        prop_assert_eq!(costs(&got), costs(&fresh));
-        let current = Problem {
-            graph: snapshot(search.graph(), ids),
-            start: problem.start,
-            goals: problem.goals.clone(),
-        };
-        let solutions = got
-            .solutions
-            .iter()
-            .map(|s| multiobjective_search::Solution {
-                cost: s.cost,
-                path: s.path.iter().map(|&v| v as usize).collect(),
-            })
-            .collect();
-        check_paths(
-            &current,
-            &Output {
-                solutions,
-                stats: got.stats,
-            },
-        )
-    };
-
-    compare(&search, &ids)?;
+    compare(problem, &search, &ids)?;
     for change in changes {
         let live: Vec<usize> = ids
             .iter()
@@ -111,7 +122,7 @@ fn check<const N: usize>(problem: &Problem<N>, changes: &[Change<N>]) -> Result<
             _ => continue,
         }
 
-        compare(&search, &ids)?;
+        compare(problem, &search, &ids)?;
     }
 
     Ok(())

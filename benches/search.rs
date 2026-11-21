@@ -4,7 +4,8 @@
 use std::fmt::Write;
 use std::hint::black_box;
 
-use criterion::Criterion;
+use criterion::measurement::WallTime;
+use criterion::{BenchmarkGroup, Criterion};
 use multiobjective_search::{
     Epsilon, Front, FrontIndex, Graph, IndexedFront, MvHeuristic, ReverseGraph, RoadGraph,
     SingleValued, TreeFront, WeightedSum, ZeroHeuristic, apex_mvh, apex_star, boa_star,
@@ -363,10 +364,18 @@ fn bench_anytime_apex(c: &mut Criterion) {
 /// sizes: random-cost grids with two and three objectives and a
 /// `NetMaker` graph with its queries.
 fn bench_suite(c: &mut Criterion) {
-    use multiobjective_search::{netmaker, netmaker_queries, random_grid};
-
     let mut group = c.benchmark_group("suite");
     group.sample_size(10);
+
+    suite_grid2(&mut group);
+    suite_grid3(&mut group);
+    suite_netmaker(&mut group);
+    group.finish();
+}
+
+/// The bi-objective searches on a 20 x 20 random-cost suite grid.
+fn suite_grid2(group: &mut BenchmarkGroup<'_, WallTime>) {
+    use multiobjective_search::random_grid;
 
     let (grid2, (s, t)) = random_grid::<2>(20, 20, 1);
     group.bench_function("grid2_20x20/boa_star", |b| {
@@ -396,6 +405,11 @@ fn bench_suite(c: &mut Criterion) {
             )
         });
     });
+}
+
+/// The three-objective searches on an 8 x 8 random-cost suite grid.
+fn suite_grid3(group: &mut BenchmarkGroup<'_, WallTime>) {
+    use multiobjective_search::random_grid;
 
     let (grid3, (s, t)) = random_grid::<3>(8, 8, 2);
     group.bench_function("grid3_8x8/namoa_star_dr", |b| {
@@ -415,6 +429,11 @@ fn bench_suite(c: &mut Criterion) {
             )
         });
     });
+}
+
+/// NAMOA*dr and A*pex over the queries of a 300-node `NetMaker` graph.
+fn suite_netmaker(group: &mut BenchmarkGroup<'_, WallTime>) {
+    use multiobjective_search::{netmaker, netmaker_queries};
 
     let net = netmaker(300, 1, 10, 20, 3);
     let queries = netmaker_queries(300, 3, 4);
@@ -438,7 +457,6 @@ fn bench_suite(c: &mut Criterion) {
             }
         });
     });
-    group.finish();
 }
 
 /// Single-objective Dijkstra distances from `goal` on a grid (its own
@@ -469,7 +487,6 @@ fn distances(grid: &Grid<2>, goal: u32, cost: impl Fn([u32; 2]) -> u32) -> Vec<u
 fn bench_anytime(c: &mut Criterion) {
     let grid = Grid::<2> { side: 24 };
     let goal = grid.goal();
-    let is_goal = |s: &u32| *s == goal;
     let (h1, h2) = (
         distances(&grid, goal, |w| w[0]),
         distances(&grid, goal, |w| w[1]),
@@ -478,13 +495,29 @@ fn bench_anytime(c: &mut Criterion) {
     let h = |s: &u32| Some([h1[*s as usize], h2[*s as usize]]);
     let mut group = c.benchmark_group("grid_24x24_2obj_anytime");
 
+    anytime_reusing(&mut group, &grid, h, &sum);
+    anytime_baselines(&mut group, &grid, h);
+    group.finish();
+}
+
+/// BOA*, A-BOA*ε and A-BOA*ε with weighted-sum pruning (`sum`: the exact
+/// distance under the summed costs) on `grid` with the heuristic `h`.
+fn anytime_reusing(
+    group: &mut BenchmarkGroup<'_, WallTime>,
+    grid: &Grid<2>,
+    h: impl Fn(&u32) -> Option<[u32; 2]> + Copy,
+    sum: &[u32],
+) {
+    let goal = grid.goal();
+    let is_goal = |s: &u32| *s == goal;
+
     group.bench_function("boa_star", |b| {
-        b.iter(|| boa_star(&grid, heuristic_fn(h), black_box(0), is_goal));
+        b.iter(|| boa_star(grid, heuristic_fn(h), black_box(0), is_goal));
     });
     group.bench_function("a_boa_star_eps", |b| {
         b.iter(|| {
             boa_star_anytime(
-                &grid,
+                grid,
                 heuristic_fn(h),
                 black_box(0),
                 is_goal,
@@ -501,7 +534,7 @@ fn bench_anytime(c: &mut Criterion) {
                 heuristic: heuristic_fn(|s: &u32| Some(sum[*s as usize])),
             };
             boa_star_anytime_ws(
-                &grid,
+                grid,
                 heuristic_fn(h),
                 black_box(0),
                 is_goal,
@@ -512,6 +545,18 @@ fn bench_anytime(c: &mut Criterion) {
             )
         });
     });
+}
+
+/// The anytime baselines without reuse, Iterative-PP-A* and basic
+/// A-BOA*ε, on `grid` with the heuristic `h`.
+fn anytime_baselines(
+    group: &mut BenchmarkGroup<'_, WallTime>,
+    grid: &Grid<2>,
+    h: impl Fn(&u32) -> Option<[u32; 2]> + Copy,
+) {
+    let goal = grid.goal();
+    let is_goal = |s: &u32| *s == goal;
+
     group.bench_function("iterative_pp_a_star", |b| {
         let schedule = [
             Epsilon::new(1, 100),
@@ -521,7 +566,7 @@ fn bench_anytime(c: &mut Criterion) {
         ];
         b.iter(|| {
             pp_a_star_iterative(
-                &grid,
+                grid,
                 heuristic_fn(h),
                 black_box(0),
                 is_goal,
@@ -534,7 +579,7 @@ fn bench_anytime(c: &mut Criterion) {
     group.bench_function("basic_a_boa_star_eps", |b| {
         b.iter(|| {
             boa_star_anytime_basic(
-                &grid,
+                grid,
                 heuristic_fn(h),
                 black_box(0),
                 is_goal,
@@ -544,7 +589,6 @@ fn bench_anytime(c: &mut Criterion) {
             )
         });
     });
-    group.finish();
 }
 
 /// The exact multi-valued heuristic of a grid: per cell, the Pareto set of
@@ -606,37 +650,51 @@ fn bench_multi_valued(c: &mut Criterion) {
         ("10pct", Epsilon::new(1, 10)),
         ("50pct", Epsilon::new(1, 2)),
     ] {
-        let built = apex_mvh(&grid, [goal], [eps; 3]);
-        let mut fixed = built.clone();
-        fixed.make_consistent(&grid);
-        println!(
-            "apex_mvh {name}: {} estimates, {} after the fix",
-            built.size(),
-            fixed.size()
-        );
-
-        group.bench_function(format!("build_apex_{name}"), |b| {
-            b.iter(|| apex_mvh(&grid, [black_box(goal)], [eps; 3]));
-        });
-        group.bench_function(format!("build_fixed_{name}"), |b| {
-            b.iter(|| {
-                let mut table = apex_mvh(&grid, [black_box(goal)], [eps; 3]);
-                table.make_consistent(&grid);
-                table
-            });
-        });
-        group.bench_function(format!("lazy_apex_{name}"), |b| {
-            b.iter(|| namoa_star_dr_mvh_lazy(&grid, &built, black_box(0), is_goal));
-        });
-        group.bench_function(format!("lazy_fixed_{name}"), |b| {
-            b.iter(|| namoa_star_dr_mvh_lazy(&grid, &fixed, black_box(0), is_goal));
-        });
-        group.bench_function(format!("eager_fixed_{name}"), |b| {
-            b.iter(|| namoa_star_dr_mvh(&grid, &fixed, black_box(0), is_goal));
-        });
+        apex_mvh_tables(&mut group, &grid, name, eps);
     }
 
     group.finish();
+}
+
+/// Builds A*pex MVH tables for `grid` at tolerance `eps` (`name` in the
+/// bench ids), with and without the consistency fix, and benches building
+/// them and searching with them.
+fn apex_mvh_tables(
+    group: &mut BenchmarkGroup<'_, WallTime>,
+    grid: &Grid<3>,
+    name: &str,
+    eps: Epsilon,
+) {
+    let goal = grid.goal();
+    let is_goal = |s: &u32| *s == goal;
+    let built = apex_mvh(grid, [goal], [eps; 3]);
+    let mut fixed = built.clone();
+    fixed.make_consistent(grid);
+    println!(
+        "apex_mvh {name}: {} estimates, {} after the fix",
+        built.size(),
+        fixed.size()
+    );
+
+    group.bench_function(format!("build_apex_{name}"), |b| {
+        b.iter(|| apex_mvh(grid, [black_box(goal)], [eps; 3]));
+    });
+    group.bench_function(format!("build_fixed_{name}"), |b| {
+        b.iter(|| {
+            let mut table = apex_mvh(grid, [black_box(goal)], [eps; 3]);
+            table.make_consistent(grid);
+            table
+        });
+    });
+    group.bench_function(format!("lazy_apex_{name}"), |b| {
+        b.iter(|| namoa_star_dr_mvh_lazy(grid, &built, black_box(0), is_goal));
+    });
+    group.bench_function(format!("lazy_fixed_{name}"), |b| {
+        b.iter(|| namoa_star_dr_mvh_lazy(grid, &fixed, black_box(0), is_goal));
+    });
+    group.bench_function(format!("eager_fixed_{name}"), |b| {
+        b.iter(|| namoa_star_dr_mvh(grid, &fixed, black_box(0), is_goal));
+    });
 }
 
 /// Inserting 1000 pseudo-random points into a frontier, two and three

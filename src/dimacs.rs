@@ -563,7 +563,7 @@ mod tests {
         assert_eq!(graph.coordinates(0), None);
     }
 
-    /// Every error kind is reported with its line.
+    /// Every `.gr` error kind is reported with its line.
     #[test]
     fn errors() {
         let kind = |d: &str, t: &str| RoadGraph::from_dimacs(d, t).map(|_| ()).unwrap_err();
@@ -605,7 +605,11 @@ mod tests {
         );
         let e = kind(DISTANCE, "p sp 3 3\na 1 2 5\na 3 2 5\na 1 3 6\n");
         assert_eq!((e.line, e.kind), (3, DimacsErrorKind::ArcMismatch));
+    }
 
+    /// Every `.co` error kind is reported.
+    #[test]
+    fn coordinate_errors() {
         let graph = RoadGraph::from_dimacs(DISTANCE, TIME).expect("valid");
         let co = |text: &str| {
             graph
