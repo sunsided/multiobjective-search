@@ -29,9 +29,8 @@ applyTo: ".github/workflows/**,Taskfile.dist.yaml,**/Taskfile.dist.yaml,.pre-com
   layout, no `working-directory` defaults.
 - `fuzz/` is a separate nightly workspace. Its tasks live in `fuzz/Taskfile.dist.yaml`,
   included as `fuzz:`; CI's `fuzz` job mirrors `task fuzz:build` and `task fuzz:lint`.
-- `Cargo.lock` and `fuzz/Cargo.lock` are tracked and record `search-core` from crates.io
-  (`source = "registry+..."`, with checksum). The publish workflow uses `--locked`. Never
-  commit a lock rewritten under the local hub `[patch.crates-io]`: it records a path source.
+- `Cargo.lock` is not tracked (library crate; `fuzz/Cargo.lock` neither), so no step uses
+  `--locked`. Local builds use the hub `[patch.crates-io]`; CI resolves fresh from crates.io.
 - `scripts/check-branch.sh` is the single definition of allowed branch names. It is used by
   the Taskfile, the hook and the CI `branch` job.
 - New jobs that should gate merges must also be added to branch protection. Mention that in

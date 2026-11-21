@@ -18,8 +18,8 @@ needs before it can be merged.
 
    Every crate below the hub then builds against the sibling working tree. A patch whose
    version does not match the requirement is unused (cargo warns), and crates.io is used.
-   The tracked `Cargo.lock` must keep recording search-core from crates.io: do not commit
-   a lock that `cargo` rewrote while the patch was active.
+   `Cargo.lock` is not tracked (library crate), so the path entries the patch writes into
+   the local lock never reach a commit. CI resolves fresh from crates.io.
 2. Install Rust via [rustup](https://rustup.rs/). Development uses current stable; the MSRV
    in `Cargo.toml` (`rust-version`) is checked for every target, tests and benches included.
 3. Install [Task](https://taskfile.dev/installation/). All commands below go through it. Run
