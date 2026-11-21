@@ -16,6 +16,7 @@
 //! | [`pp_a_star_iterative`] | 2 | consistent | Iterative-PP-A*: PP-A* from scratch over a falling tolerance schedule, the anytime baseline. |
 //! | [`pp_a_star`] | 2 | consistent | PP-A*: path pairs, factors `1 + ε1` and `1 + ε2` on both objectives. |
 //! | [`apex_star`] | any `N` | consistent | A*pex: apex-path pairs, a factor `1 + ε_i` per objective. |
+//! | [`apex_star_anytime`] | any `N` | consistent | A-A*pex: A*pex over a falling tolerance schedule, reusing earlier solutions. |
 //! | [`boba_star`] | 2 | computed internally | Bidirectional; needs a [`ReverseGraph`] and a single goal. |
 //! | [`boba_star_with`] | 2 | consistent, both directions | [`boba_star`] with caller-supplied heuristics. |
 //! | [`emoa_star`] | any `N` | consistent | Lazy open list, truncated dominance; `O(log n)` checks for 3 objectives. |
@@ -128,7 +129,7 @@ pub use anytime_boa::{
     AnytimeFront, ApproxFactor, WeightedSum, boa_star_anytime, boa_star_anytime_basic,
     boa_star_anytime_ws,
 };
-pub use apex::{MergeRule, apex_star, apex_star_with};
+pub use apex::{MergeRule, apex_star, apex_star_anytime, apex_star_with};
 pub use benchmarks::{
     BenchmarkGraph, Query, guards_grid, netmaker, netmaker_queries, random_grid, road_extended,
 };

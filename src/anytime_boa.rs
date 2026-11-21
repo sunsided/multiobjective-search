@@ -40,19 +40,19 @@ use crate::output::{Solution, Stats};
 
 pub use factor::ApproxFactor;
 
-/// What an anytime bi-objective search returns: the solutions found, the
+/// What an anytime search returns, for `N` objectives (two by default): the solutions found, the
 /// approximation factor they are known to achieve, and whether the search
 /// ran to completion.
 #[derive(Debug, Clone)]
-pub struct AnytimeFront<S, C> {
+pub struct AnytimeFront<S, C, const N: usize = 2> {
     /// Solutions, one per cost vector, sorted by cost lexicographically
     /// ascending (first objective strictly ascending, second strictly
     /// descending). Empty when no goal is reachable. Pareto-optimal for
     /// A-BOA*ε; for [`pp_a_star_iterative`](crate::pp_a_star_iterative)
     /// only mutually non-dominated until the search is complete.
-    pub solutions: Vec<Solution<S, [C; 2]>>,
+    pub solutions: Vec<Solution<S, [C; N]>>,
     /// An `ε` such that every Pareto-optimal cost is within `1 + ε` of
-    /// some solution in both objectives. Zero when
+    /// some solution in every objective. Zero when
     /// [`AnytimeFront::complete`] is set.
     pub factor: ApproxFactor<C>,
     /// `true` if the search finished on its own rather than being stopped

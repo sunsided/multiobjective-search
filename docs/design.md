@@ -451,7 +451,7 @@ Search: Algorithms, Applications, and Emerging Directions." arXiv
 | Negative edge costs (3.2; Ahmadi et al. 2024) | not implemented | `Cost` is unsigned by design (search-core) |
 | FPTAS (3.1; Warburton, Tsaggouris and Zaroliagis) | `fptas_constrained` | covered for the constrained path |
 | PP-A*, A*pex (3.2) | `pp_a_star`, `apex_star` | covered |
-| Anytime MOS: A-A*pex (3.2) | `boa_star_anytime` (two objectives), `pp_a_star_iterative` | A-A*pex itself is not implemented: its reuse across tolerances for `N` objectives would need an `N`-objective `AnytimeFront` |
+| Anytime MOS: A-A*pex (3.2; Zhang et al. 2024) | `apex_star_anytime` for any `N`, `AnytimeFront<S, C, N>` (two objectives by default), plus `boa_star_anytime` and `pp_a_star_iterative` | **added**, without the A-A*pex paper: runs reuse every earlier solution as a known solution that prunes pairs it covers (full check in every objective, since seeds break A*pex's first-objective argument); merged pairs are not reused because their dropped paths are lost. Checked per report against brute force, falling factors, exact at zero; truncating the seed check fails the tests |
 | Correlation-aware approximation (3.2; Halle et al. 2025) | not implemented | a preprocessing framework over correlated objectives, outside the searches |
 | Parallel MOS: objective-order portfolios with shared bounds, SIMD set dominance (3.2) | `parallel_moa_star`, `sip_mosp`, `boba_star_parallel` | covered except SIMD (the crate forbids `unsafe` and stays portable) |
 | Dynamic MOS, MO path-based D* Lite (3.2) | not implemented | needs an edge-change interface the `Graph` trait does not have |

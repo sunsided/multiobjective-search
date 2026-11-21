@@ -38,6 +38,8 @@
 //! may merge (they are never extended, and `h = 0` at every goal); and
 //! dominated or duplicate representatives are dropped from the output.
 
+mod anytime;
+
 use alloc::collections::{BTreeMap, BinaryHeap};
 use alloc::vec::Vec;
 use core::cmp::Reverse;
@@ -50,6 +52,8 @@ use crate::epsilon::Epsilon;
 use crate::graph::{Graph, ZeroHeuristic};
 use crate::output::{Output, Solution, Stats};
 use crate::pareto::{Front, TruncatedFront};
+
+pub use anytime::apex_star_anytime;
 
 /// How [`apex_star_with`] picks the representative path when it merges two
 /// apex-path pairs. Both are the paper's; the choice never affects the
@@ -263,6 +267,9 @@ struct Search<'a, G: Graph, H, C, P, const N: usize> {
     solutions: Vec<Pair<C, N>>,
     /// Reused successor buffer, empty between expansions.
     successors: Vec<(G::State, [C; N])>,
+    /// Costs of solutions known from earlier runs (A-A*pex): pairs within
+    /// the tolerances of one are pruned, checked in every objective.
+    seeds: Vec<[C; N]>,
     /// Whether [`StateInfo::expanded`] is filled, for
     /// [`expanded_apexes`].
     record: bool,
@@ -331,6 +338,7 @@ where
             states: BTreeMap::new(),
             solutions: Vec::new(),
             successors: Vec::new(),
+            seeds: Vec::new(),
             record,
             stats: Stats::default(),
         }
@@ -403,6 +411,11 @@ where
     /// than `f` (Lemma 1), and its bounded representative is within the
     /// tolerance of that apex.
     fn is_covered_by_solution(&mut self, f: &[C; N]) -> bool {
+        // Seeds come from earlier runs, so they get the full test.
+        if self.seeds.iter().any(|s| self.within(s, f)) {
+            return true;
+        }
+
         let paths = &self.paths;
         let eps = &self.eps;
         let Some(solution) = self.solutions.iter_mut().find(|s| {

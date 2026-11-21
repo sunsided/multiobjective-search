@@ -118,9 +118,9 @@ where
 /// has no unit of its own. Zero when there is no such component (no
 /// solution, or a zero-cost one that covers everything); infinite if the
 /// scaled denominator saturates, which is a valid but loose bound.
-fn as_factor<S, C: Cost + WideMul>(
+pub(crate) fn as_factor<S, C: Cost + WideMul, const N: usize>(
     eps: Epsilon,
-    solutions: &[Solution<S, [C; 2]>],
+    solutions: &[Solution<S, [C; N]>],
 ) -> ApproxFactor<C> {
     let unit = solutions
         .iter()

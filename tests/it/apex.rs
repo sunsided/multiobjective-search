@@ -199,3 +199,75 @@ proptest! {
         check_all(&scaled(p), eps)?;
     }
 }
+
+/// Checks an A-A*pex run: every report covers the brute-force front within
+/// its factor and is mutually non-dominated, the factors fall, and a
+/// complete run is exact.
+fn check_anytime<const N: usize>(
+    problem: &Problem<N>,
+    schedule: &[[Epsilon; N]],
+    limit: Option<usize>,
+) -> Result<(), TestCaseError> {
+    use multiobjective_search::{ApproxFactor, Stats, apex_star_anytime};
+
+    let front = pareto_costs(problem);
+    let goal = |v: &usize| problem.goals[*v];
+    let mut reports: Vec<(Vec<[u32; N]>, ApproxFactor<u32>)> = Vec::new();
+    let result = apex_star_anytime(
+        &problem.graph,
+        ZeroHeuristic,
+        problem.start,
+        goal,
+        schedule.iter().copied(),
+        |s, f| reports.push((s.iter().map(|x| x.cost).collect(), f)),
+        move |stats: &Stats| limit.is_some_and(|l| stats.expanded >= l),
+    );
+
+    for (costs, factor) in &reports {
+        for s in &front {
+            prop_assert!(
+                costs
+                    .iter()
+                    .any(|r| (0..N).all(|i| factor.covers(r[i], s[i])))
+            );
+        }
+
+        for (k, a) in costs.iter().enumerate() {
+            for b in &costs[k + 1..] {
+                prop_assert!(a < b && !(0..N).all(|i| a[i] <= b[i]));
+            }
+        }
+    }
+
+    for pair in reports.windows(2) {
+        prop_assert!(pair[1].1 < pair[0].1);
+    }
+
+    if result.complete {
+        let costs: Vec<_> = result.solutions.iter().map(|s| s.cost).collect();
+        prop_assert_eq!(costs, front);
+    }
+
+    check_paths(
+        problem,
+        &Output {
+            solutions: result.solutions,
+            stats: result.stats,
+        },
+    )
+}
+
+proptest! {
+    /// A-A*pex on falling schedules ending at zero, with and without a
+    /// budget, two and three objectives.
+    #[test]
+    fn anytime_apex(p2 in problems::<2>(), p3 in problems::<3>(), steps in prop::collection::vec((1..=3_u32, 1..=6_u32), 0..3), limit in prop::option::of(0..30_usize)) {
+        let mut eps: Vec<Epsilon> = steps.iter().map(|&(n, d)| Epsilon::new(n, d)).collect();
+        eps.sort_by(|a, b| (u64::from(b.num()) * u64::from(a.den())).cmp(&(u64::from(a.num()) * u64::from(b.den()))));
+        eps.push(Epsilon::ZERO);
+        let s2: Vec<[Epsilon; 2]> = eps.iter().map(|&e| [e; 2]).collect();
+        let s3: Vec<[Epsilon; 3]> = eps.iter().map(|&e| [e; 3]).collect();
+        check_anytime(&scaled(p2), &s2, limit)?;
+        check_anytime(&scaled(p3), &s3, limit)?;
+    }
+}
