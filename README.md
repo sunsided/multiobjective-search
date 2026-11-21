@@ -71,6 +71,9 @@ reference on random graphs with two to four objectives:
 - [x] Multi-objective minimum spanning trees (`pareto_spanning_trees`,
       `two_phase_spanning_trees`) and exact objective correlation
       (`objective_correlation`)
+- [x] TPA (`tpa`, `tpa_paths`): exact anytime box splitting with
+      augmented-Tchebycheff subproblems over any solver, and the hypervolume
+      indicator (`hypervolume`), after Domínguez-Ríos et al.
 - [x] Brute-force reference over simple paths (`brute_force`)
 - [x] Pareto frontier for any number of objectives, `O(log n)` queries for two
       (`Front`, `BiFront`)

@@ -465,6 +465,42 @@ then 0): reuse 0.40 ms, reuse-enh 0.34 ms, restart 0.58 ms, hybrid
 0.41 ms; the earlier seeding variant 1.35 ms; restarting A*pex from
 scratch for every tolerance 1.2 to 1.5 ms.
 
+### TPA against Domínguez-Ríos et al.
+
+M. Á. Domínguez-Ríos, F. Chicano, E. Alba. "Effective anytime algorithm
+for multiobjective combinatorial optimization problems." arXiv
+2403.08807. `tpa` runs the method over any `TchebycheffSolver`;
+`tpa_paths` instantiates it for shortest paths with `PathTchebycheff`.
+`tests/it/tpa.rs` checks exact fronts against brute force (two to four
+objectives), that every reported point is efficient, and budgets.
+
+| Paper rule | Here | Status |
+|---|---|---|
+| Boxes `[l, u)` in `p` priority queues by direction, the initial box `[z^I, z^N]` (Algorithm 2) | same; for paths `z^I` from one Dijkstra per objective, `z^N` a strict bound `2 · Σ edge costs + unit` (the paper computes `max f_i` with a solver) | matches; the nadir bound is looser, which only changes `ϵ` and the priorities |
+| Subproblem `min max_i ω_i (f_i - z^I_i) + ϵ Σ ω_i (f_i - z^I_i)`, `ω_i = 1/max(1, u_i - z^I_i)`, `ϵ = 1/(2p(r - 1))`; accept when `obj < 1` and `z^I < u` | same, in exact integer form (`Scalarization`: the objective times `K Π d_i`, compared with `K Π d_i`) | matches |
+| The subproblem solver (an ILP solver in the paper) | `TchebycheffSolver`; for paths a best-first search on the score of `g + h` with per-state dominance | deliberate: the score is monotone, so the first goal popped is optimal |
+| Select the next direction in turn, then the highest priority (Algorithm 3) | same | matches |
+| p-partition of every box with `z < u` (Definition 1, Algorithm 4), joins of boxes with comparable upper bounds (Definition 3) | same | matches |
+| Priority: scaled volume, reduced by `[l, z]` for direction `p` (Definition 4) | the numerator `Π (u_i - l_i)` of the child box, minus `Π (z_i - l_i)` of the parent's lower corner for direction `p` (the common denominator `Π (z^N - z^I)` cancels) | matches, reading `scaled(B)` in Definition 4 as the child box's, as Proposition 5's proof does |
+| Anytime reporting | `on_front` after every new point (factor infinite until complete, zero then), `Budget<Stats>` on the solver's expansions before each subproblem | follows the crate's anytime conventions |
+| Quality indicators (Section 3) | `hypervolume` exact by slicing; the spread comparison uses the HVR with reference nadir + 1 | the general spread `Δ*` and `ε+` are not implemented |
+
+Spread over time (the `report_spread` printout of the bench, 14x14
+random grid, two objectives, 12 Pareto points, HVR in per mille at an
+expansion budget):
+
+| Budget | TPA | A-BOA*ε | A-A*pex |
+|---|---|---|---|
+| 100 | 562 | 102 | 870 |
+| 1000 | 580 | 102 | 985 |
+| 3000 | 930 | 1000 | 1000 |
+| 10000 | 1000 | 1000 | 1000 |
+
+A-A*pex checks the budget only between iterations, so its first iteration
+(ε = 0.1) always completes; TPA spends a full subproblem search per point,
+which costs more expansions on this small graph than the label-setting
+searches.
+
 ### Coverage of the Salzman et al. survey
 
 O. Salzman, C. Hernández Ulloa, A. Felner, S. Koenig. "Multi-Objective

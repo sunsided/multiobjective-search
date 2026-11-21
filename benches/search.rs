@@ -21,6 +21,7 @@ fn main() {
     bench_anytime(&mut criterion);
     bench_suite(&mut criterion);
     bench_anytime_apex(&mut criterion);
+    report_spread();
     bench_road(&mut criterion);
     bench_three_objectives(&mut criterion);
     bench_four_objectives(&mut criterion);
@@ -171,6 +172,64 @@ fn bench_four_objectives(c: &mut Criterion) {
         b.iter(|| emoa_star_tree(&grid, ZeroHeuristic, black_box(0), is_goal));
     });
     group.finish();
+}
+
+/// Prints the hypervolume ratio (the paper's HVR, reference point nadir
+/// plus one) that TPA, A-BOA*ε and A-A*pex reach within growing expansion
+/// budgets on a two-objective random grid, the spread-over-time comparison
+/// of Domínguez-Ríos et al.
+fn report_spread() {
+    use multiobjective_search::{
+        AnytimeApex, Stats, apex_star_anytime_with, hypervolume, random_grid, tpa_paths,
+    };
+
+    let (grid, (s, t)) = random_grid::<2>(14, 14, 11);
+    let exact = boa_star(&grid, ZeroHeuristic, s, |v| *v == t);
+    let costs = |sols: &[multiobjective_search::Solution<u32, [u32; 2]>]| {
+        sols.iter().map(|x| x.cost).collect::<Vec<_>>()
+    };
+    let full = costs(&exact.solutions);
+    let reference = [0, 1].map(|i| full.iter().map(|c| c[i]).max().unwrap_or(0) + 1);
+    let value = |b: search_core::BigUint| {
+        b.limbs()
+            .iter()
+            .rev()
+            .fold(0_u128, |v, &l| (v << 32) | u128::from(l))
+    };
+    let whole = value(hypervolume(&full, reference)).max(1);
+    let ratio = |front: &[[u32; 2]]| value(hypervolume(front, reference)) * 1000 / whole;
+    let schedule: Vec<[Epsilon; 2]> = [10, 40, 160, 640]
+        .into_iter()
+        .map(|d| [Epsilon::new(1, d); 2])
+        .chain([[Epsilon::ZERO; 2]])
+        .collect();
+
+    println!(
+        "spread: |front| = {}, HVR in per mille by expansion budget",
+        full.len()
+    );
+    println!("budget  tpa  a_boa_eps  a_apex");
+    for limit in [100, 300, 1000, 3000, 10_000, 30_000] {
+        let budget = move |stats: &Stats| stats.expanded >= limit;
+        let tpa = tpa_paths(&grid, ZeroHeuristic, s, |v| *v == t, |_, _| {}, budget);
+        let boa = boa_star_anytime(&grid, ZeroHeuristic, s, |v| *v == t, 4, |_, _| {}, budget);
+        let apex = apex_star_anytime_with(
+            &grid,
+            ZeroHeuristic,
+            s,
+            |v| *v == t,
+            schedule.iter().copied(),
+            AnytimeApex::Reuse,
+            |_, _| {},
+            budget,
+        );
+        println!(
+            "{limit:>6}  {:>4}  {:>9}  {:>6}",
+            ratio(&costs(&tpa.solutions)),
+            ratio(&costs(&boa.solutions)),
+            ratio(&costs(&apex.solutions)),
+        );
+    }
 }
 
 /// Anytime A*pex to the exact front on a three-objective random grid with

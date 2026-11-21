@@ -39,6 +39,7 @@
 //! | [`label_correcting`] | any `N` | none | Multi-objective label correcting (Guerriero and Musmanno). |
 //! | [`DynamicSearch`] | any `N` | none | Dynamic MOS: incremental repair after edge changes on a [`DynamicGraph`]. |
 //! | [`pareto_spanning_trees`] | any `N` | none | Multi-objective minimum spanning trees; [`two_phase_spanning_trees`] for two objectives. |
+//! | [`tpa_paths`] | any `N` | admissible | TPA: exact anytime box splitting with augmented-Tchebycheff subproblems, well spread early; [`tpa`] over any solver. |
 //! | [`brute_force`] | any `N` | none | Exhaustive reference for tests on small graphs. |
 //!
 //! Supporting types:
@@ -112,6 +113,7 @@ mod fractional;
 mod frontier_search;
 mod graph;
 mod heuristics;
+mod indicators;
 mod label_correcting;
 mod mvh;
 mod namoa;
@@ -127,6 +129,7 @@ mod reference_point;
 #[cfg(feature = "parallel")]
 mod sip;
 mod spanning;
+mod tpa;
 mod two_phase;
 
 pub use aggregate::{Aggregated, Aggregation, aggregated_search};
@@ -164,6 +167,7 @@ pub use fptas::fptas_constrained;
 pub use fractional::{ExactReliability, Reliability, min_cost_reliability_ratio, min_ratio_path};
 pub use graph::{EdgeGraph, Graph, ReverseGraph, ZeroHeuristic};
 pub use heuristics::{DifferentialHeuristic, IdealPoint, Towards};
+pub use indicators::hypervolume;
 pub use label_correcting::label_correcting;
 pub use mvh::{MvHeuristic, MvHeuristicFn, MvhTable, SingleValued, apex_mvh, mv_heuristic_fn};
 pub use namoa::{namoa_star, namoa_star_dr};
@@ -182,4 +186,5 @@ pub use sip::{SipConfig, sip_mosp};
 pub use spanning::{
     Tree, TreeEdge, pareto_spanning_trees, supported_spanning_trees, two_phase_spanning_trees,
 };
+pub use tpa::{PathTchebycheff, Scalarization, TchebycheffSolver, TpaResult, tpa, tpa_paths};
 pub use two_phase::{supported_solutions, two_phase};
