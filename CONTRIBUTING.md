@@ -5,26 +5,11 @@ needs before it can be merged.
 
 ## Setup
 
-1. [search-core](https://github.com/sunsided/search-core) is a regular crates.io dependency
-   (`search-core = "0.3"`), and CI and Dependabot resolve it from crates.io. To develop
-   against a local checkout of it, clone the planning crates side by side under one hub
-   directory and put an untracked `.cargo/config.toml` in that hub (not in this
-   repository):
-
-   ```toml
-   [patch.crates-io]
-   search-core = { path = "search-core" }
-   ```
-
-   Every crate below the hub then builds against the sibling working tree. A patch whose
-   version does not match the requirement is unused (cargo warns), and crates.io is used.
-   `Cargo.lock` is not tracked (library crate), so the path entries the patch writes into
-   the local lock never reach a commit. CI resolves fresh from crates.io.
-2. Install Rust via [rustup](https://rustup.rs/). Development uses current stable; the MSRV
+1. Install Rust via [rustup](https://rustup.rs/). Development uses current stable; the MSRV
    in `Cargo.toml` (`rust-version`) is checked for every target, tests and benches included.
-3. Install [Task](https://taskfile.dev/installation/). All commands below go through it. Run
+2. Install [Task](https://taskfile.dev/installation/). All commands below go through it. Run
    `task` to list them.
-4. Optional tools: the tasks tell you when one is missing.
+3. Optional tools: the tasks tell you when one is missing.
    - [cargo-nextest](https://nexte.st/) for faster tests;
    - [cargo-deny](https://github.com/EmbarkStudios/cargo-deny) and
      [cargo-hack](https://github.com/taiki-e/cargo-hack);
@@ -33,7 +18,7 @@ needs before it can be merged.
    - [mermaid-cli](https://github.com/mermaid-js/mermaid-cli) when changing diagrams;
    - [actionlint](https://github.com/rhysd/actionlint) and [zizmor](https://docs.zizmor.sh/);
    - nightly Rust plus [cargo-fuzz](https://github.com/rust-fuzz/cargo-fuzz) for fuzzing.
-5. Install the git hooks with [prek](https://prek.j178.dev/) (`prek install`), or with
+4. Install the git hooks with [prek](https://prek.j178.dev/) (`prek install`), or with
    `pre-commit install`. Fast checks run on commit; clippy and tests run on push.
 
 ## Everyday commands
@@ -94,10 +79,6 @@ works on them.
 
 Versions follow [Semantic Versioning 2.0](https://semver.org/spec/v2.0.0.html), as Cargo
 implements it (in `0.x`, a minor bump is breaking).
-
-Release automation is dormant until the repository variable `RELEASE_APP_CLIENT_ID` (and the
-secret `RELEASE_APP_PRIVATE_KEY`) of the release GitHub App is set: until then the release-plz
-jobs are skipped. Setting the variable activates releases.
 
 Releases are handled by [release-plz](https://release-plz.dev/). Every merge to
 `main` updates a release PR. Merging that PR tags the release and creates the

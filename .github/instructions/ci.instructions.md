@@ -25,12 +25,11 @@ applyTo: ".github/workflows/**,Taskfile.dist.yaml,**/Taskfile.dist.yaml,.pre-com
   `deny`, `msrv`, `semver`, `fuzz`, plus `actionlint` and `zizmor` in `actions-lint.yml`.
 - `msrv` checks every target, tests and benches included, on the declared `rust-version`
   (`cargo hack check --rust-version --all-targets --all-features`).
-- `search-core` is a plain crates.io dependency: no sibling checkout, no subdirectory
-  layout, no `working-directory` defaults.
+- `search-core` is a plain crates.io dependency: no subdirectory layout, no `working-directory` defaults.
 - `fuzz/` is a separate nightly workspace. Its tasks live in `fuzz/Taskfile.dist.yaml`,
   included as `fuzz:`; CI's `fuzz` job mirrors `task fuzz:build` and `task fuzz:lint`.
 - `Cargo.lock` is not tracked (library crate; `fuzz/Cargo.lock` neither), so no step uses
-  `--locked`. Local builds use the hub `[patch.crates-io]`; CI resolves fresh from crates.io.
+  `--locked`. CI resolves fresh from crates.io.
 - `scripts/check-branch.sh` is the single definition of allowed branch names. It is used by
   the Taskfile, the hook and the CI `branch` job.
 - New jobs that should gate merges must also be added to branch protection. Mention that in

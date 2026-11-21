@@ -27,8 +27,8 @@ applyTo: "**/*.rs"
   division or floats.
 - Every new search is cross-checked against `brute_force` (or another exact algorithm) by
   property tests under `tests/it/`, and parsers get a fuzz target under `fuzz/`.
-- Public API changes go with a matching update to the README "Scope and status" list and the
-  crate-level table in `src/lib.rs`. Sibling crates (`mapf-search`, `connector-routing`) build
-  against this one by path, so flag breaking changes.
+- Public API changes go with a matching update to the README "Algorithms" list and the
+  crate-level table in `src/lib.rs`. Sibling crates (`mapf-search`, `connector-routing`) depend
+  on this one, so flag breaking changes.
 - Mermaid diagrams in doc comments must match the code they describe. Update them when the
   structure changes.

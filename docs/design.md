@@ -1,8 +1,5 @@
 # multiobjective-search: design
 
-Status: draft, 2026-11-20, updated after milestones 1-4. Covers the plan
-up to 0.1.0 and the shape of later milestones.
-
 ## Scope
 
 Exact multi-objective shortest-path search over implicit graphs: find one
@@ -72,7 +69,7 @@ Pareto dominance.
 
 ### Dominance
 
-`Dominates` (published in 0.0.0) stays. It is implemented for `[C; N]`:
+`Dominates` stays. It is implemented for `[C; N]`:
 `a` dominates `b` when `a[i] <= b[i]` for every `i` and `a != b`. Weak
 dominance (`<=` everywhere, equality allowed) is what pruning uses; it is a
 free function `weakly_dominates`.
@@ -614,33 +611,12 @@ compares; the searches would stay unchanged.
 - Benchmarks (later): DIMACS road networks with distance and time, the
   standard bi-objective benchmark set used by the BOA* paper.
 
-## Milestones
-
-Milestones 1 to 4 are done (NAMOA*dr, `boa_star_approx` and
-`brute_force` came along); milestone 5 has grid benches but no DIMACS
-loader yet.
-
-1. **Frontier and BOA\***: `Cost`, `Dominates`, `Graph`,
-   `Heuristic`, `BiFront`, `boa_star`, brute-force cross-check tests.
-2. **NAMOA\*:** general `Front<C, N>`, per-state open and closed frontiers,
-   `namoa_star` for any `N`. Cross-check against BOA* for `N = 2`.
-3. **BOBA\*:** `ReverseGraph`, bidirectional search with the two
-   lexicographic directions, heuristics from single-objective backward
-   searches.
-4. **EMOA\*:** truncated 3D frontier (sorted `Vec`), `emoa_star`; the
-   balanced-tree variant `emoa_star_tree` on `TreeFront`.
-5. **Benchmarks and 0.1.0:** DIMACS loader (`RoadGraph`, in the library,
-   `no_std`, parsing from `&str`), criterion benches on a generated road
-   network in DIMACS format, release.
-
 ## Cross-crate needs
 
-None for milestone 1. Later:
+- `apex_star` needs `search_core::WideMul`, an exact cost-by-cost product, for
+  the greedy merge rule.
 
-- `apex_star` needs `search_core::WideMul` (search-core `draft/initial`,
-  "Add WideMul, an exact cost-by-cost product") for the greedy merge rule.
-
-- Consumers (miniplan, a future `heuristic-search`) implement `Graph` and
+- Consumers (miniplan, `heuristic-search`) implement `Graph` and
   `Heuristic` for their models. If `heuristic-search` defines a
   single-objective successor trait with the same shape, both may move to
   `search-core` (only once both exist, per architecture.md).
@@ -651,7 +627,7 @@ None for milestone 1. Later:
 ## Open questions
 
 - Should states require `Ord` (BTreeMap, no dependency) or `Hash` (needs
-  `hashbrown` in `no_std`)? Draft uses `Ord`.
+  `hashbrown` in `no_std`)? The crate uses `Ord`.
 - Should `Graph` stay a callback-into-`Vec` interface, or return an
   iterator via a GAT?
 - Is a goal predicate enough, or do consumers need a goal state for
@@ -660,4 +636,4 @@ None for milestone 1. Later:
   trait) instead of documenting the precondition?
 - BOBA*'s preliminary searches run one after another. The paper runs
   them two at a time in threads; a `std` feature could add that.
-- Should `brute_force` stay public or move to the tests? Draft: public.
+- Should `brute_force` stay public or move to the tests? Currently public.

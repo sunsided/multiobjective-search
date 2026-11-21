@@ -18,7 +18,6 @@ applyTo: "**/Cargo.toml,release-plz.toml,.github/workflows/release-plz.yml,**/CH
   the code uses API from a newer release.
 - `rust-version` is a signal, not a contract. Raising it is allowed when a dependency or a
   feature benefits. It needs a minor release and a changelog note, never a patch release.
-- Release automation is dormant until the repository variable `RELEASE_APP_CLIENT_ID` is set.
 - release-plz runs in git-only mode: it tags and creates GitHub Releases. `publish-crates-io.yml`
   publishes from the tag in the `crates-io` environment, via trusted publishing
   (`id-token: write`, no `CARGO_REGISTRY_TOKEN`). Keep it that way.

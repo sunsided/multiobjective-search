@@ -1,6 +1,7 @@
 //! # Multi-objective search
 //!
-//! Multi-objective shortest paths: BOA*, BOBA*, EMOA* and NAMOA* over Pareto frontiers.
+//! Multi-objective shortest paths over Pareto frontiers: BOA*, BOBA*, EMOA*, NAMOA*dr, A*pex
+//! and their approximate, anytime and parallel variants.
 //!
 //! Given a graph whose edges carry cost vectors, the algorithms find one path
 //! for every Pareto-optimal cost vector from a start state to a goal.
@@ -78,10 +79,6 @@
 //!   parallel MOA* (`parallel_moa_star`), one search per objective order.
 //!
 //! Without features the crate is `no_std` with `alloc`.
-//!
-//! ## Status
-//!
-//! Pre-release. Version 0.0.0 reserves the name; the API is a draft and will change.
 //!
 //! Repository: <https://github.com/sunsided/multiobjective-search>
 

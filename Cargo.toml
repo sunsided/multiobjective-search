@@ -1,6 +1,6 @@
 [package]
 name = "multiobjective-search"
-description = "Multi-objective shortest paths: BOA*, BOBA*, EMOA* and NAMOA* over Pareto frontiers"
+description = "Multi-objective shortest paths over Pareto frontiers: BOA*, BOBA*, EMOA*, NAMOA*dr, A*pex and their approximate, anytime and parallel variants"
 version = "0.0.0"
 edition = "2024"
 rust-version = "1.86"
@@ -8,8 +8,8 @@ authors = ["Markus Mayer <widemeadows@gmail.com>"]
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/sunsided/multiobjective-search"
 readme = "README.md"
-keywords = ["search", "pareto", "multi-objective", "astar", "pathfinding"]
-categories = ["algorithms", "no-std"]
+keywords = ["pareto", "multi-objective", "astar", "pathfinding", "shortest-path"]
+categories = ["algorithms", "no-std", "mathematics"]
 # Repository tooling stays out of the published crate.
 exclude = [
     ".github/",
