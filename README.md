@@ -20,6 +20,8 @@ dependencies besides [`search-core`](https://github.com/sunsided/search-core), w
 and heuristic traits it uses, and ships a loader for the 9th DIMACS Challenge road networks
 along with the benchmark-suite generators of Peer et al.
 
+Part of the [planning and search crates](https://sunsided.github.io/planning-and-search/); see also this crate's [overview page](https://sunsided.github.io/planning-and-search/crates/multiobjective-search/).
+
 ## Who this is for
 
 - Route planners that have to show the trade-off between two or more costs (fastest,

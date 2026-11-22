@@ -7,6 +7,7 @@ rust-version = "1.86"
 authors = ["Markus Mayer <widemeadows@gmail.com>"]
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/sunsided/multiobjective-search"
+homepage = "https://sunsided.github.io/planning-and-search/crates/multiobjective-search/"
 readme = "README.md"
 keywords = ["pareto", "multi-objective", "astar", "pathfinding", "shortest-path"]
 categories = ["algorithms", "no-std", "mathematics"]
