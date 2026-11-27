@@ -96,30 +96,36 @@ where
     )
 }
 
-/// Applies `changes` one by one to a search guided by `heuristic` and
-/// checks the front after each; returns the graph after every change, the
-/// first included.
-fn check<H, const N: usize>(
-    problem: &Problem<N>,
-    changes: &[Change<N>],
-    heuristic: H,
-) -> Result<Vec<DynamicGraph<u32, N>>, TestCaseError>
-where
-    H: Heuristic<u32, [u32; N]>,
-{
+/// The graph of `problem` and the identities of its edges, in order.
+fn build<const N: usize>(problem: &Problem<N>) -> (DynamicGraph<u32, N>, Vec<usize>) {
     let mut graph = DynamicGraph::new(small(problem.graph.nodes));
-    let mut ids: Vec<usize> = problem
+    let ids = problem
         .graph
         .edges
         .iter()
         .map(|&(a, b, c)| graph.add_edge(small(a), small(b), c))
         .collect();
-    let goals = problem.goals.clone();
-    let mut search =
-        DynamicSearch::with_heuristic(graph, heuristic, small(problem.start), move |s: &u32| {
-            goals[*s as usize]
-        });
+    (graph, ids)
+}
 
+/// The goal test for a problem's goal flags.
+fn goal_test(goals: Vec<bool>) -> impl Fn(&u32) -> bool {
+    move |s: &u32| goals[*s as usize]
+}
+
+/// Applies `changes` one by one to `search`, built on `problem` with edge
+/// identities `ids`, and checks the front after each; returns the graph
+/// after every change, the first included.
+fn check<P, H, const N: usize>(
+    problem: &Problem<N>,
+    changes: &[Change<N>],
+    mut search: DynamicSearch<u32, P, N, H>,
+    mut ids: Vec<usize>,
+) -> Result<Vec<DynamicGraph<u32, N>>, TestCaseError>
+where
+    P: Fn(&u32) -> bool,
+    H: Heuristic<u32, [u32; N]>,
+{
     compare(problem, &search, &ids)?;
     let mut graphs = vec![search.graph().clone()];
     for change in changes {
@@ -187,15 +193,23 @@ fn envelope<const N: usize>(
     table
 }
 
-/// Checks `changes` without a heuristic, then again guided by the envelope
-/// of the ideal-point heuristic over every graph the first run saw.
+/// Checks `changes` without a heuristic (through [`DynamicSearch::new`]),
+/// then again guided by the envelope of the ideal-point heuristic over
+/// every graph the first run saw.
 fn check_both<const N: usize>(
     problem: &Problem<N>,
     changes: &[Change<N>],
 ) -> Result<(), TestCaseError> {
-    let graphs = check(problem, changes, ZeroHeuristic)?;
+    let start = small(problem.start);
+    let (graph, ids) = build(problem);
+    let blind = DynamicSearch::new(graph, start, goal_test(problem.goals.clone()));
+    let graphs = check(problem, changes, blind, ids)?;
+
     let table = envelope(problem, &graphs);
-    check(problem, changes, heuristic_fn(|s: &u32| table[*s as usize]))?;
+    let h = heuristic_fn(|s: &u32| table[*s as usize]);
+    let (graph, ids) = build(problem);
+    let guided = DynamicSearch::with_heuristic(graph, h, start, goal_test(problem.goals.clone()));
+    check(problem, changes, guided, ids)?;
     Ok(())
 }
 
