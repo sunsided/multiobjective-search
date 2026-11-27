@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.2](https://github.com/sunsided/multiobjective-search/compare/v0.1.1...v0.1.2) - 2026-11-27
+
+### Changed
+
+- Guide dynamic multi-objective search with a heuristic ([#6](https://github.com/sunsided/multiobjective-search/pull/6))
+- Make the dropped graphs of the guided property pass explicit
+- State the heuristic requirement instead of a state-only restriction
+- Run the blind dynamic property pass through DynamicSearch::new
+- Document that dynamic search estimates once per label
+- Guide dynamic search with a heuristic
+
 ## [0.1.1](https://github.com/sunsided/multiobjective-search/compare/v0.1.0...v0.1.1) - 2026-11-22
 
 ### Changed
