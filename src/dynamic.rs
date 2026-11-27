@@ -229,6 +229,11 @@ where
     /// decreases, use bounds that hold for every edge cost, such as
     /// geometric distances times the cheapest cost per unit.
     ///
+    /// The search calls `heuristic` once per label, when the label is made,
+    /// and keeps that estimate: labels are immutable, and the estimate
+    /// depends on the state only. A heuristic whose estimates change between
+    /// calls or repairs is not supported.
+    ///
     /// # Panics
     ///
     /// Panics if `start` is not a state of `graph`.
