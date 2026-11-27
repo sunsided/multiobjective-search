@@ -230,9 +230,10 @@ where
     /// geometric distances times the cheapest cost per unit.
     ///
     /// The search calls `heuristic` once per label, when the label is made,
-    /// and keeps that estimate: labels are immutable, and the estimate
-    /// depends on the state only. A heuristic whose estimates change between
-    /// calls or repairs is not supported.
+    /// and keeps that estimate for the label's lifetime, across later edge
+    /// changes. A heuristic may keep a workspace and return different
+    /// numbers per call, as long as every estimate it returns is admissible
+    /// on every graph the search will see.
     ///
     /// # Panics
     ///
