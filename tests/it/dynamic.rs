@@ -209,8 +209,8 @@ fn check_both<const N: usize>(
     let h = heuristic_fn(|s: &u32| table[*s as usize]);
     let (graph, ids) = build(problem);
     let guided = DynamicSearch::with_heuristic(graph, h, start, goal_test(problem.goals.clone()));
-    check(problem, changes, guided, ids)?;
-    Ok(())
+    // The guided run sees the same graphs as the blind one; no need to keep them.
+    check(problem, changes, guided, ids).map(drop)
 }
 
 /// A heuristic that points at the goal saves the expansion of a detour
