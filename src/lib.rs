@@ -38,7 +38,7 @@
 //! | [`disjoint_pair`] | scalar | none | Suurballe: the cheapest edge- or state-disjoint pair; [`supported_disjoint_pairs`] for two objectives, [`disjoint_pair_front`] for the full bi-objective front, [`maximally_disjoint_pairs`] for cost against shared edges, [`dissimilar_paths`] for k dissimilar paths. Needs an [`EdgeGraph`]. |
 //! | [`aggregated_search`] | `M` hidden, `K` solution | admissible in the hidden space | Objective-aggregation functions over hidden objectives, exact or ε-approximate. |
 //! | [`label_correcting`](fn@label_correcting) | any `N` | none | Multi-objective label correcting (Guerriero and Musmanno). |
-//! | [`DynamicSearch`] | any `N` | none | Dynamic MOS: incremental repair after edge changes on a [`DynamicGraph`]. |
+//! | [`DynamicSearch`] | any `N` | none or admissible | Dynamic MOS: incremental repair after edge changes on a [`DynamicGraph`]; heuristic-guided with [`DynamicSearch::with_heuristic`]. |
 //! | [`pareto_spanning_trees`] | any `N` | none | Multi-objective minimum spanning trees; [`two_phase_spanning_trees`] for two objectives. |
 //! | [`tpa_paths`] | any `N` | admissible | TPA: exact anytime box splitting with augmented-Tchebycheff subproblems, well spread early; [`tpa`](fn@tpa) over any solver. |
 //! | [`brute_force`] | any `N` | none | Exhaustive reference for tests on small graphs. |

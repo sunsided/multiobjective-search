@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 42cd20f024c2567847a8e0333eee9f939d1f6fb9b91c8c259b153e7853718ddf # shrinks to p2 = Problem { graph: EdgeList { nodes: 3, edges: [(1, 2, [0, 0]), (0, 0, [0, 0]), (1, 0, [0, 0]), (0, 0, [0, 0]), (0, 0, [0, 0]), (0, 2, [0, 0])] }, start: 1, goals: [false, false, true] }, c2 = [Cost(2684056781079269748, [0, 1])], p3 = Problem { graph: EdgeList { nodes: 1, edges: [] }, start: 0, goals: [false] }, c3 = []

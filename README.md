@@ -141,7 +141,8 @@ reference on random graphs with two to four objectives:
   (`label_correcting`), the ideal-point heuristic (`IdealPoint`) and
   differential heuristics (`DifferentialHeuristic`)
 - Dynamic search (`DynamicGraph`, `DynamicSearch`): incremental repair after
-  edge additions, cost changes and removals
+  edge additions, cost changes and removals, optionally guided by a heuristic
+  that stays admissible across the changes (`DynamicSearch::with_heuristic`)
 - Multi-objective minimum spanning trees (`pareto_spanning_trees`,
   `two_phase_spanning_trees`) and exact objective correlation
   (`objective_correlation`)
